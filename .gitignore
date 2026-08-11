@@ -9,3 +9,5 @@ __pycache__/
 venv/
 
 .vscode/
+# Google OAuth credentials
+client_secret_*.json
