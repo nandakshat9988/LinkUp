@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Activity Buddy</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Find Activities Near You</h1>
+        
+        <div class="card">
+            <h2>Post an Activity</h2>
+            <input type="text" id="username" placeholder="Your Name (e.g., MS Dhoni)">
+            <input type="text" id="activity" placeholder="What are you doing? (e.g., Need 2 players for Cricket)">
+            <button onclick="postActivity()">Post Activity with my Location</button>
+            <p id="status"></p>
+        </div>
+
+        <div class="card">
+            <h2>Suggested For You (ML Recommendations)</h2>
+            <button onclick="getRecommendations()">Find Nearby Matches</button>
+            <ul id="recommendation-list"></ul>
+        </div>
+
+        <div class="card">
+            <h2>All Recent Posts</h2>
+            <button onclick="loadAllPosts()">Refresh Feed</button>
+            <ul id="posts-list"></ul>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
