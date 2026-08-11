@@ -1,0 +1,20 @@
+# Spins up just the two infra dependencies (MongoDB + Redis) locally.
+# Run: docker compose up -d
+# Your Node/Python services still run normally with `npm start` / `python ml_service.py`
+# and connect to these via the URIs already in .env.example.
+
+services:
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  mongo_data:
