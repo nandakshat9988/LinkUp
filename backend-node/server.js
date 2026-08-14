@@ -16,11 +16,22 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-connectDB();
-
 // Health check endpoints for Render / monitoring
 app.get(['/health', '/healthz', '/api/health'], (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Ensure MongoDB is connected before handling API requests
+app.use(async (req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    try {
+      await connectDB();
+    } catch (err) {
+      console.error('Database connection failure:', err.message);
+      return res.status(500).json({ error: 'Database connection failed: ' + err.message });
+    }
+  }
+  next();
 });
 
 app.use('/api/auth', authRoutes);

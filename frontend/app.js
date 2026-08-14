@@ -62,6 +62,7 @@ function requireLogin() {
 
 async function register(event) {
     event.preventDefault();
+    setText('register-status', 'Creating account...');
 
     const body = {
         name: value('register-name'),
@@ -80,12 +81,13 @@ async function register(event) {
         saveSession(data.token, data.user);
         window.location.href = 'dashboard.html';
     } catch (err) {
-        setText('register-status', err.message);
+        setText('register-status', err.message || 'Registration failed');
     }
 }
 
 async function login(event) {
     event.preventDefault();
+    setText('login-status', 'Signing in...');
 
     const body = {
         email: value('login-email'),
@@ -102,7 +104,7 @@ async function login(event) {
         saveSession(data.token, data.user);
         window.location.href = 'dashboard.html';
     } catch (err) {
-        setText('login-status', err.message);
+        setText('login-status', err.message || 'Login failed. If you are new, click "Create an account" below.');
     }
 }
 
