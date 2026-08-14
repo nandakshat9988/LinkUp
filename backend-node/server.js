@@ -1,4 +1,5 @@
 require('dotenv').config();
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 
@@ -10,10 +11,17 @@ const activityRoutes = require('./routes/activities');
 const recommendationRoutes = require('./routes/recommendations');
 
 const app = express();
+const PORT = process.env.PORT || 3000;
+
 app.use(cors());
 app.use(express.json());
 
 connectDB();
+
+// Health check endpoints for Render / monitoring
+app.get(['/health', '/healthz', '/api/health'], (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
 app.use('/api/auth', authRoutes);
 
@@ -22,6 +30,16 @@ app.use('/api/auth', authRoutes);
 app.use('/api/activities', locationRateLimiter, activityRoutes);
 app.use('/api/recommendations', locationRateLimiter, recommendationRoutes);
 
-app.listen(3000, () => {
-  console.log('Node.js server running on http://localhost:3000');
+// Serve frontend static assets (HTML, CSS, JS)
+const frontendPath = path.join(__dirname, '../frontend');
+app.use(express.static(frontendPath));
+
+// Fallback to index.html for non-API routes
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api/')) return next();
+  res.sendFile(path.join(frontendPath, 'index.html'));
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });

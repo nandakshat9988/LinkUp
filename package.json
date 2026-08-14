@@ -1,0 +1,15 @@
+{
+  "name": "linkup",
+  "version": "1.0.0",
+  "description": "LinkUp - Location-based Activity Sharing & Recommendation App",
+  "main": "backend-node/server.js",
+  "scripts": {
+    "postinstall": "npm install --prefix backend-node",
+    "build": "npm install --prefix backend-node",
+    "start": "node backend-node/server.js",
+    "dev": "node backend-node/server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

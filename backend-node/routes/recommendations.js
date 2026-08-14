@@ -64,7 +64,8 @@ router.post('/', requireAuth, async (req, res) => {
     const myHistory = await Activity.find({ participants: req.user.id });
 
     try {
-      const mlResponse = await fetch('http://127.0.0.1:5000/recommend', {
+      const mlServiceUrl = (process.env.ML_SERVICE_URL || 'http://127.0.0.1:5000').replace(/\/+$/, '');
+      const mlResponse = await fetch(`${mlServiceUrl}/recommend`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

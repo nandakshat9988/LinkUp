@@ -1,4 +1,8 @@
-const NODE_SERVER = 'http://localhost:3000/api';
+const NODE_SERVER = window.API_BASE_URL || (
+    window.location.protocol === 'file:' || (window.location.hostname === 'localhost' && window.location.port && window.location.port !== '3000')
+        ? 'http://localhost:3000/api'
+        : '/api'
+);
 
 let authToken = localStorage.getItem('token');
 let currentUser = JSON.parse(localStorage.getItem('user') || 'null');
