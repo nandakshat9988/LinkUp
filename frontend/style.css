@@ -29,7 +29,6 @@ body {
     display: grid;
     place-items: center;
     padding: 24px;
-    background: #0d0f12;
 }
 
 .auth-box {

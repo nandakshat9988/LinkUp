@@ -29,45 +29,25 @@ def recommend():
     if not candidates:
         return jsonify({"recommendations": []})
 
-    # ---- 1. Geospatial score ----
-    # Node already computed the real distance using the 2dsphere index; here
-    # we just normalize it to 0-1 so it's comparable to the other scores.
-    for c in candidates:
-        distance_km = c['distanceMeters'] / 1000
-        c['geo_score'] = max(0, 1 - (distance_km / radius_km))
-
-    # ---- 2. Collaborative filtering ----
-    # Simple, explainable version: reward activity types this user has
-    # engaged with before, proportional to how often. (A larger production
-    # system would do this across ALL users' interaction data with matrix
-    # factorization or item-item similarity — same idea, more data.)
+    # Collaborative counts from user history
     type_counts = {}
     for h in history:
         type_counts[h['activityType']] = type_counts.get(h['activityType'], 0) + 1
     max_count = max(type_counts.values()) if type_counts else 1
 
-    for c in candidates:
-        c['collab_score'] = type_counts.get(c['activityType'], 0) / max_count
-
-    # ---- 3. Content-based / vector similarity ----
-    # TF-IDF + cosine similarity is a lightweight stand-in for real semantic
-    # embeddings. It compares word overlap, so it won't know "box cricket"
-    # and "leather ball cricket" are related unless they share words.
-    # PRODUCTION UPGRADE: replace TfidfVectorizer with a sentence-transformer
-    # embedding model, store vectors in FAISS/Pinecone, and query by nearest
-    # neighbor there instead — that's what actually captures meaning, not
-    # just shared vocabulary.
+    # Content-based vector similarity (TF-IDF + cosine similarity)
     history_text = " ".join(h['description'] for h in history) or my_skill
     corpus = [history_text] + [c['description'] for c in candidates]
     tfidf_matrix = TfidfVectorizer(stop_words='english').fit_transform(corpus)
     similarities = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:]).flatten()
 
+    # Compute hybrid scores (Geospatial + Collaborative + Content + Skill bonus)
     for c, sim in zip(candidates, similarities):
+        distance_km = c['distanceMeters'] / 1000
+        c['geo_score'] = max(0, 1 - (distance_km / radius_km))
+        c['collab_score'] = type_counts.get(c['activityType'], 0) / max_count
         c['content_score'] = float(sim)
         c['skill_bonus'] = SKILL_MATCH_BONUS if c['skillLevel'] == my_skill else 0
-
-    # ---- 4. Combine into one hybrid score ----
-    for c in candidates:
         c['score'] = (
             W_GEO * c['geo_score']
             + W_COLLAB * c['collab_score']

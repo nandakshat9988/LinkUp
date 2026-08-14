@@ -6,7 +6,8 @@ const { getDynamicRadiusKm } = require('../utils/geo');
 const router = express.Router();
 
 function userOwnsActivity(activity, userId) {
-  return activity.user.toString() === userId;
+  const ownerId = activity.user._id || activity.user;
+  return ownerId.toString() === userId;
 }
 
 function canJoin(activity, userId) {
