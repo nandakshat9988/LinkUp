@@ -22,6 +22,7 @@ async function connectDB() {
 
   if (!cached.promise) {
     const opts = {
+      dbName: 'LinkUp',
       serverSelectionTimeoutMS: 10000,
     };
     cached.promise = mongoose.connect(uri, opts).then((mongooseInstance) => {

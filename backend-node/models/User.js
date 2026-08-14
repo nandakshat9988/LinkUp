@@ -16,6 +16,6 @@ const userSchema = new mongoose.Schema({
   },
 
   createdAt: { type: Date, default: Date.now }
-});
+}, { collection: 'LinkUp-Users' });
 
-module.exports = mongoose.model('User', userSchema);
+module.exports = mongoose.model('User', userSchema, 'LinkUp-Users');
