@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - LinkUp</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="center-page">
+    <main class="auth-box">
+        <p class="eyebrow">LINKUP</p>
+        <h1>Login</h1>
+        <p class="muted">Welcome back. Login to find and join local activities.</p>
+
+        <form onsubmit="login(event)">
+            <label for="login-email">Email</label>
+            <input type="email" id="login-email" placeholder="you@example.com" required>
+
+            <label for="login-password">Password</label>
+            <input type="password" id="login-password" placeholder="Your password" required>
+
+            <button class="btn primary" type="submit">Login</button>
+        </form>
+
+        <p id="login-status" class="status-text"></p>
+        <p class="page-link">New here? <a href="register.html">Create an account</a></p>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>

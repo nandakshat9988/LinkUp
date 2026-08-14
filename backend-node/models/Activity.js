@@ -5,10 +5,17 @@ const activitySchema = new mongoose.Schema({
 
   activityType: { type: String, required: true },   // e.g. "cricket", "running"
   description: { type: String, required: true },    // e.g. "Need 2 players for box cricket"
+  contactDetails: { type: String, default: '' },    // Contact info shared with users who join
   skillLevel: {
     type: String,
     enum: ['beginner', 'intermediate', 'advanced'],
     default: 'beginner'
+  },
+
+  status: {
+    type: String,
+    enum: ['open', 'completed'],
+    default: 'open'
   },
 
   // GeoJSON Point — MongoDB's required shape for geospatial queries.
@@ -22,6 +29,7 @@ const activitySchema = new mongoose.Schema({
   // filtering later: "users who joined X also tend to join Y".
   participants: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 
+  completedAt: { type: Date },
   createdAt: { type: Date, default: Date.now }
 });
 

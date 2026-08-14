@@ -108,6 +108,11 @@ asked — it shows you understand the difference between "vector-shaped" and
 A/B test different weights against an engagement metric (e.g. join-through
 rate) rather than guess.
 
+**Fallback behavior:** if the Python ML service is not running, the Node route
+does not fail the dashboard. It returns a simpler fallback recommendation list
+based on distance plus a small skill-level bonus. This keeps the UI usable even
+when the ML service is offline.
+
 ---
 
 ## 4. Auth & Security
@@ -153,6 +158,67 @@ need server-side storage and don't scale horizontally without a shared store
 (ironically, you'd need Redis for sessions too). JWTs are stateless and self-contained,
 at the cost of being harder to revoke early (can't invalidate one JWT without
 a blocklist, since the server doesn't track which tokens are "active").
+
+---
+
+## 5. Separate Pages and Post Management
+
+**Files:** `frontend/login.html`, `frontend/register.html`, `frontend/dashboard.html`, `frontend/app.js`, `routes/activities.js`, `models/Activity.js`
+
+The frontend is now split into separate pages:
+
+- `index.html` only redirects the user. If a token exists, it opens `dashboard.html`; otherwise it opens `login.html`.
+- `login.html` calls `login(event)` in `app.js`, then POSTs to `/api/auth/login`.
+- `register.html` calls `register(event)` in `app.js`, then POSTs to `/api/auth/register`.
+- `dashboard.html` calls `startDashboard()`, which loads recent posts and the logged-in user's own posts.
+
+The dashboard has these main sections:
+
+| Section | Frontend function | Backend route |
+|---|---|---|
+| Post an Activity | `postActivity(event)` | `POST /api/activities` |
+| Suggested For You | `getRecommendations()` | `POST /api/recommendations` |
+| Nearby Activities | `findNearby()` | `GET /api/activities/nearby` |
+| Recent Posts | `loadAllPosts()` | `GET /api/activities` |
+| Your Posts | `loadMyPosts()` | `GET /api/activities/mine` |
+
+### Edit, delete, and complete
+
+The `Your Posts` section lets a user manage only posts they created:
+
+- Save changes: `PUT /api/activities/:id`
+- Complete post: `PATCH /api/activities/:id/complete`
+- Delete post: `DELETE /api/activities/:id`
+
+The important security idea is that the frontend is not trusted. The frontend can
+hide edit buttons from other users, but the backend still checks ownership using:
+
+```js
+activity.user.toString() === req.user.id
+```
+
+That prevents a user from editing or deleting someone else's post by manually
+calling the API.
+
+### Joining a post
+
+When a user clicks `Join`, the frontend calls:
+
+```text
+POST /api/activities/:id/join
+```
+
+The backend adds the logged-in user to the post's `participants` array with
+`addToSet`, which avoids duplicate joins. It then returns the joined post with
+the host's name and the post's saved `contactDetails`.
+
+Important: contact details are saved on the activity post itself at posting time.
+That means Join shows the contact text that the host entered for that specific
+post, not a live value copied from the user's account later.
+
+Completed posts stay visible in Recent Posts and Your Posts, but they are
+filtered out of Nearby Activities and Suggested For You because they should no
+longer be joinable.
 
 ---
 

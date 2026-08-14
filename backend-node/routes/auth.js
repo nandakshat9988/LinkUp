@@ -15,18 +15,27 @@ function signToken(user) {
   );
 }
 
+function publicUser(user) {
+  return {
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    skillLevel: user.skillLevel
+  };
+}
+
 // POST /api/auth/register — email + password signup
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, skillLevel } = req.body;
     if (await User.findOne({ email })) {
       return res.status(400).json({ error: 'Email already registered' });
     }
 
     const hashed = await bcrypt.hash(password, 10); // 10 salt rounds
-    const user = await User.create({ name, email, password: hashed });
+    const user = await User.create({ name, email, password: hashed, skillLevel });
 
-    res.json({ token: signToken(user), user: { id: user._id, name: user.name, email: user.email } });
+    res.json({ token: signToken(user), user: publicUser(user) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -44,7 +53,7 @@ router.post('/login', async (req, res) => {
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(400).json({ error: 'Invalid credentials' });
 
-    res.json({ token: signToken(user), user: { id: user._id, name: user.name, email: user.email } });
+    res.json({ token: signToken(user), user: publicUser(user) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -68,7 +77,7 @@ router.post('/google', async (req, res) => {
       user = await User.create({ name: payload.name, email: payload.email, googleId: payload.sub });
     }
 
-    res.json({ token: signToken(user), user: { id: user._id, name: user.name, email: user.email } });
+    res.json({ token: signToken(user), user: publicUser(user) });
   } catch (err) {
     res.status(401).json({ error: 'Invalid Google token' });
   }

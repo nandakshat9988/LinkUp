@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - LinkUp</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <main class="app-shell">
+        <header class="topbar">
+            <div>
+                <p class="eyebrow">LINKUP</p>
+                <h1>Dashboard</h1>
+            </div>
+            <button class="btn light" onclick="logout()">Logout</button>
+        </header>
+
+        <section class="panel user-panel">
+            <div>
+                <p class="muted">Signed in as</p>
+                <h2 id="current-user"></h2>
+                <p id="current-email" class="muted"></p>
+            </div>
+            <p class="skill-pill" id="current-skill"></p>
+        </section>
+
+        <section class="panel" id="join-details" style="display:none;">
+            <p class="eyebrow">JOIN DETAILS</p>
+            <h2 id="join-title"></h2>
+            <p id="join-description"></p>
+            <div class="details-grid">
+                <p id="join-host"></p>
+                <p id="join-contact"></p>
+                <p id="join-skill"></p>
+                <p id="join-players"></p>
+            </div>
+        </section>
+
+        <div class="dashboard-grid">
+            <section class="panel">
+                <h2>Post an Activity</h2>
+                <p class="muted">Create a post using your current location.</p>
+
+                <form onsubmit="postActivity(event)">
+                    <label for="activity-type">Activity</label>
+                    <input type="text" id="activity-type" placeholder="Cricket, football, running" required>
+
+                    <label for="activity-description">Description</label>
+                    <input type="text" id="activity-description" placeholder="Need 2 players today evening" required>
+
+                    <label for="activity-contact">Contact details</label>
+                    <input type="text" id="activity-contact" placeholder="Phone, email, Instagram, or meeting note" required>
+
+                    <label for="activity-skill">Skill level</label>
+                    <select id="activity-skill">
+                        <option value="beginner">Beginner</option>
+                        <option value="intermediate">Intermediate</option>
+                        <option value="advanced">Advanced</option>
+                    </select>
+
+                    <button class="btn primary" type="submit">Post activity</button>
+                </form>
+
+                <p id="post-status" class="status-text"></p>
+            </section>
+
+            <section class="panel">
+                <div class="section-title">
+                    <div>
+                        <h2>Suggested For You</h2>
+                        <p class="muted">Recommendations from nearby open posts.</p>
+                    </div>
+                    <button class="btn light" onclick="getRecommendations()">Find</button>
+                </div>
+                <ul id="recommendation-list" class="post-list"></ul>
+            </section>
+        </div>
+
+        <section class="panel">
+            <div class="section-title">
+                <div>
+                    <h2>Nearby Activities</h2>
+                    <p class="muted">Activities near your current location.</p>
+                </div>
+                <button class="btn light" onclick="findNearby()">Show nearby</button>
+            </div>
+            <p id="radius-status" class="status-text"></p>
+            <ul id="nearby-list" class="post-list"></ul>
+        </section>
+
+        <section class="panel">
+            <div class="section-title">
+                <div>
+                    <h2>Recent Posts</h2>
+                    <p class="muted">Newest posts from the community.</p>
+                </div>
+                <button class="btn light" onclick="loadAllPosts()">Refresh</button>
+            </div>
+            <ul id="posts-list" class="post-list"></ul>
+        </section>
+
+        <section class="panel">
+            <div class="section-title">
+                <div>
+                    <h2>Your Posts</h2>
+                    <p class="muted">Edit, delete, or complete your own posts.</p>
+                </div>
+                <button class="btn light" onclick="loadMyPosts()">Refresh</button>
+            </div>
+            <p id="my-posts-status" class="status-text"></p>
+            <ul id="my-posts-list" class="post-list edit-list"></ul>
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+    <script>
+        startDashboard();
+    </script>
+</body>
+</html>

@@ -11,13 +11,15 @@ const RADIUS_TIERS = [
 ];
 
 const PROBE_RADIUS_METERS = 5000; // fixed 5km probe used only to measure density
+const EARTH_RADIUS_METERS = 6378137;
 
 async function getDynamicRadiusKm(lng, lat) {
+  const radiusInRadians = PROBE_RADIUS_METERS / EARTH_RADIUS_METERS;
+
   const count = await Activity.countDocuments({
     location: {
-      $nearSphere: {
-        $geometry: { type: 'Point', coordinates: [lng, lat] },
-        $maxDistance: PROBE_RADIUS_METERS
+      $geoWithin: {
+        $centerSphere: [[lng, lat], radiusInRadians]
       }
     }
   });

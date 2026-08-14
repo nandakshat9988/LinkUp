@@ -5,17 +5,31 @@ const { getDynamicRadiusKm } = require('../utils/geo');
 
 const router = express.Router();
 
-// POST /api/activities — create a new activity post (must be logged in)
+function userOwnsActivity(activity, userId) {
+  return activity.user.toString() === userId;
+}
+
+function canJoin(activity, userId) {
+  const ownerId = activity.user._id || activity.user;
+  return activity.status !== 'completed' && ownerId.toString() !== userId;
+}
+
+// Create a new activity post. The user must be logged in.
 router.post('/', requireAuth, async (req, res) => {
   try {
-    const { activityType, description, lat, lng, skillLevel } = req.body;
+    const { activityType, description, contactDetails, lat, lng, skillLevel } = req.body;
+
+    if (!activityType || !description || !contactDetails || lat === undefined || lng === undefined) {
+      return res.status(400).json({ error: 'Activity, description, contact details, and location are required' });
+    }
 
     const activity = await Activity.create({
       user: req.user.id,
       activityType,
       description,
+      contactDetails,
       skillLevel: skillLevel || 'beginner',
-      location: { type: 'Point', coordinates: [lng, lat] } // GeoJSON order: [lng, lat]
+      location: { type: 'Point', coordinates: [lng, lat] }
     });
 
     res.json(activity);
@@ -24,14 +38,26 @@ router.post('/', requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/activities — plain feed, newest first (no geo filtering)
+// Public feed. Newest posts come first.
 router.get('/', async (req, res) => {
-  const activities = await Activity.find().sort({ createdAt: -1 }).limit(50).populate('user', 'name');
+  const activities = await Activity.find()
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .populate('user', 'name');
+
   res.json(activities);
 });
 
-// GET /api/activities/nearby?lat=&lng= — geospatial search using the
-// 2dsphere index, with the search radius auto-adjusted for local density.
+// Posts created by the logged-in user.
+router.get('/mine', requireAuth, async (req, res) => {
+  const activities = await Activity.find({ user: req.user.id })
+    .sort({ createdAt: -1 })
+    .populate('participants', 'name email');
+
+  res.json(activities);
+});
+
+// Nearby search uses the MongoDB 2dsphere index.
 router.get('/nearby', async (req, res) => {
   try {
     const lat = parseFloat(req.query.lat);
@@ -39,9 +65,6 @@ router.get('/nearby', async (req, res) => {
 
     const radiusKm = await getDynamicRadiusKm(lng, lat);
 
-    // $geoNear must be the first stage of the pipeline. Because `location`
-    // has a 2dsphere index, MongoDB walks that index (O(log N)) instead of
-    // computing the distance to every single document (O(N)).
     const activities = await Activity.aggregate([
       {
         $geoNear: {
@@ -51,6 +74,7 @@ router.get('/nearby', async (req, res) => {
           spherical: true
         }
       },
+      { $match: { status: { $ne: 'completed' } } },
       { $limit: 50 }
     ]);
 
@@ -60,17 +84,79 @@ router.get('/nearby', async (req, res) => {
   }
 });
 
-// POST /api/activities/:id/join — join an activity. This also generates the
-// interaction data ("who joined what") that the recommendation engine's
-// collaborative-filtering component relies on.
+// Edit your own post.
+router.put('/:id', requireAuth, async (req, res) => {
+  try {
+    const activity = await Activity.findById(req.params.id);
+    if (!activity) return res.status(404).json({ error: 'Activity not found' });
+    if (!userOwnsActivity(activity, req.user.id)) {
+      return res.status(403).json({ error: 'You can edit only your own posts' });
+    }
+
+    activity.activityType = req.body.activityType || activity.activityType;
+    activity.description = req.body.description || activity.description;
+    activity.contactDetails = req.body.contactDetails || activity.contactDetails;
+    activity.skillLevel = req.body.skillLevel || activity.skillLevel;
+
+    await activity.save();
+    res.json(activity);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Mark your own post as completed.
+router.patch('/:id/complete', requireAuth, async (req, res) => {
+  try {
+    const activity = await Activity.findById(req.params.id);
+    if (!activity) return res.status(404).json({ error: 'Activity not found' });
+    if (!userOwnsActivity(activity, req.user.id)) {
+      return res.status(403).json({ error: 'You can complete only your own posts' });
+    }
+
+    activity.status = 'completed';
+    activity.completedAt = new Date();
+
+    await activity.save();
+    res.json(activity);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete your own post.
+router.delete('/:id', requireAuth, async (req, res) => {
+  try {
+    const activity = await Activity.findById(req.params.id);
+    if (!activity) return res.status(404).json({ error: 'Activity not found' });
+    if (!userOwnsActivity(activity, req.user.id)) {
+      return res.status(403).json({ error: 'You can delete only your own posts' });
+    }
+
+    await Activity.deleteOne({ _id: activity._id });
+    res.json({ message: 'Activity deleted' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Join a post and return the full details needed by the joining user.
 router.post('/:id/join', requireAuth, async (req, res) => {
   try {
-    const activity = await Activity.findByIdAndUpdate(
-      req.params.id,
-      { $addToSet: { participants: req.user.id } },
-      { new: true }
-    );
-    res.json(activity);
+    const activity = await Activity.findById(req.params.id);
+    if (!activity) return res.status(404).json({ error: 'Activity not found' });
+    if (!canJoin(activity, req.user.id)) {
+      return res.status(400).json({ error: 'This activity cannot be joined' });
+    }
+
+    activity.participants.addToSet(req.user.id);
+    await activity.save();
+
+    const details = await Activity.findById(activity._id)
+      .populate('user', 'name email')
+      .populate('participants', 'name email');
+
+    res.json(details);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

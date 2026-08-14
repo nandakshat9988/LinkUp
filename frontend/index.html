@@ -3,149 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LinkUP — Connect Locally</title>
+    <title>LinkUp</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
-    <div class="ambient ambient-one"></div>
-    <div class="ambient ambient-two"></div>
-
-    <main class="container">
-        <header class="hero">
-            <div class="brand-row">
-                <div class="brand-logo" aria-label="LinkUP logo">
-                    <span class="logo-link">↗</span>
-                    <span class="logo-link logo-link-back">↙</span>
-                </div>
-                <span class="brand-name">Link<span>UP</span></span>
-                <span class="status-pill">● Live</span>
-            </div>
-            <h1>Find your people.<br><span>Find your activity.</span></h1>
-            <p class="hero-subtitle">Discover nearby activities, connect with players, and get personalized matches based on your interests.</p>
-        </header>
-
-        <!-- AUTH: IDs and onclick handlers are unchanged -->
-        <section class="card auth-card" id="auth-card">
-            <div class="section-heading">
-                <div>
-                    <span class="eyebrow">WELCOME BACK</span>
-                    <h2>Join the community</h2>
-                    <p>Sign in or create your account to start connecting.</p>
-                </div>
-                <div class="heading-icon">↗</div>
-            </div>
-
-            <div class="form-grid">
-                <div class="field full">
-                    <label for="reg-name">Name</label>
-                    <input type="text" id="reg-name" placeholder="Your name (register only)">
-                </div>
-                <div class="field">
-                    <label for="auth-email">Email</label>
-                    <input type="email" id="auth-email" placeholder="you@example.com">
-                </div>
-                <div class="field">
-                    <label for="auth-password">Password</label>
-                    <input type="password" id="auth-password" placeholder="••••••••">
-                </div>
-            </div>
-
-            <div class="button-row">
-                <button class="btn btn-primary" onclick="register()">Create account <span>→</span></button>
-                <button class="btn btn-secondary" onclick="login()">Login</button>
-            </div>
-            <p id="auth-status" class="status-message"></p>
-        </section>
-
-        <section class="card user-card" id="app-card" style="display:none;">
-            <div class="user-info">
-                <div class="avatar" id="user-avatar">A</div>
-                <div>
-                    <span class="eyebrow">SIGNED IN AS</span>
-                    <h3><span id="current-user"></span></h3>
-                    <span class="skill-badge"><span>●</span> <span id="current-skill"></span></span>
-                </div>
-            </div>
-            <button class="btn btn-ghost" onclick="logout()">Logout <span>↗</span></button>
-        </section>
-
-        <div class="dashboard-grid">
-            <section class="card feature-card post-card">
-                <div class="section-heading compact">
-                    <div>
-                        <span class="icon-bubble purple">＋</span>
-                        <h2>Post an Activity</h2>
-                        <p>Tell people what you're looking for.</p>
-                    </div>
-                </div>
-
-                <div class="form-grid">
-                    <div class="field">
-                        <label for="activityType">Activity</label>
-                        <input type="text" id="activityType" placeholder="e.g. Cricket">
-                    </div>
-                    <div class="field">
-                        <label for="skillLevel">Skill level</label>
-                        <select id="skillLevel">
-                            <option value="beginner">Beginner</option>
-                            <option value="intermediate">Intermediate</option>
-                            <option value="advanced">Advanced</option>
-                        </select>
-                    </div>
-                    <div class="field full">
-                        <label for="activity">Description</label>
-                        <input type="text" id="activity" placeholder="Need 2 players for box cricket">
-                    </div>
-                </div>
-
-                <button class="btn btn-primary wide" onclick="postActivity()">Post with my location <span>⌖</span></button>
-                <p id="status" class="status-message"></p>
-            </section>
-
-            <section class="card feature-card recommendation-card">
-                <div class="section-heading compact">
-                    <div>
-                        <span class="icon-bubble blue">✦</span>
-                        <h2>Suggested For You</h2>
-                        <p>Hybrid ML recommendations tailored to you.</p>
-                    </div>
-                </div>
-                <button class="btn btn-accent wide" onclick="getRecommendations()">Find nearby matches <span>→</span></button>
-                <ul id="recommendation-list" class="result-list"></ul>
-            </section>
-        </div>
-
-        <section class="card feature-card">
-            <div class="section-heading compact split">
-                <div>
-                    <span class="icon-bubble green">⌖</span>
-                    <h2>Nearby Activities</h2>
-                    <p>Geospatial search with a dynamic radius.</p>
-                </div>
-                <button class="btn btn-secondary" onclick="findNearby()">Show nearby</button>
-            </div>
-            <p id="radius-status" class="info-line"></p>
-            <ul id="nearby-list" class="result-list"></ul>
-        </section>
-
-        <section class="card feature-card">
-            <div class="section-heading compact split">
-                <div>
-                    <span class="icon-bubble orange">☷</span>
-                    <h2>Recent Posts</h2>
-                    <p>See what the community is looking for.</p>
-                </div>
-                <button class="btn btn-secondary" onclick="loadAllPosts()">↻ Refresh feed</button>
-            </div>
-            <ul id="posts-list" class="result-list feed-list"></ul>
-        </section>
-
-        <footer>
-            <span>LINKUP</span>
-            <span>Connect locally • Play together</span>
-        </footer>
+<body class="center-page">
+    <main class="auth-box">
+        <h1>LinkUp</h1>
+        <p>Opening your app...</p>
+        <a href="login.html">Go to login</a>
     </main>
 
-    <script src="app.js"></script>
+    <script>
+        const nextPage = localStorage.getItem('token') ? 'dashboard.html' : 'login.html';
+        window.location.replace(nextPage);
+    </script>
 </body>
 </html>
