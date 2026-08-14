@@ -8,13 +8,6 @@ const userSchema = new mongoose.Schema({
   password: { type: String },
   googleId: { type: String },
 
-  // Used for content-based matching (e.g. beginner cricket players see other beginners first)
-  skillLevel: {
-    type: String,
-    enum: ['beginner', 'intermediate', 'advanced'],
-    default: 'beginner'
-  },
-
   createdAt: { type: Date, default: Date.now }
 });
 

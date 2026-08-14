@@ -4,112 +4,166 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - LinkUp</title>
+    <meta name="description" content="Manage your posted activities and discover nearby games.">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <main class="app-shell">
-        <header class="topbar">
-            <div>
-                <p class="eyebrow">LINKUP</p>
-                <h1>Dashboard</h1>
+    <!-- DASHBOARD TOP NAV -->
+    <nav class="site-nav">
+        <div class="nav-container">
+            <a href="index.html" class="brand-logo">
+                <div class="logo-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                    </svg>
+                </div>
+                <span class="brand-text">LinkUp</span>
+            </a>
+
+            <div class="nav-actions">
+                <a href="index.html" class="btn btn-secondary btn-sm">Explore Home</a>
+                <button class="btn btn-danger btn-sm" onclick="logout()" id="logout-btn">Log Out</button>
             </div>
-            <button class="btn light" onclick="logout()">Logout</button>
+        </div>
+    </nav>
+
+    <!-- DASHBOARD CONTENT SHELL -->
+    <main class="dashboard-shell">
+        <!-- USER PROFILE BAR -->
+        <header class="dashboard-user-bar">
+            <div class="user-info-group">
+                <div class="user-avatar" id="user-avatar-initial">U</div>
+                <div>
+                    <h1 class="user-name-title" id="current-user">Loading...</h1>
+                    <p class="user-email-subtitle" id="current-email">user@example.com</p>
+                </div>
+            </div>
+            <div>
+                <span class="status-pill open" style="font-size: 13px; padding: 6px 14px;">● Connected to Local Node</span>
+            </div>
         </header>
 
-        <section class="panel user-panel">
-            <div>
-                <p class="muted">Signed in as</p>
-                <h2 id="current-user"></h2>
-                <p id="current-email" class="muted"></p>
-            </div>
-            <p class="skill-pill" id="current-skill"></p>
-        </section>
+        <!-- TWO COLUMN TOP GRID: POST CREATION & SUGGESTIONS -->
+        <div class="dashboard-layout-grid">
+            <!-- CREATE POST PANEL -->
+            <section class="app-panel">
+                <div class="panel-header">
+                    <div>
+                        <h2 class="panel-title">
+                            <span>✨</span> Post an Activity
+                        </h2>
+                        <p class="panel-subtitle">Create a game listing at your current location</p>
+                    </div>
+                </div>
 
-        <section class="panel" id="join-details" style="display:none;">
-            <p class="eyebrow">JOIN DETAILS</p>
-            <h2 id="join-title"></h2>
-            <p id="join-description"></p>
-            <div class="details-grid">
-                <p id="join-host"></p>
-                <p id="join-contact"></p>
-                <p id="join-skill"></p>
-                <p id="join-players"></p>
-            </div>
-        </section>
+                <form onsubmit="postActivity(event)" id="post-activity-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="activity-type" class="form-label">Activity / Sport</label>
+                            <input type="text" id="activity-type" class="form-input" placeholder="e.g. Cricket, Football, Badminton" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="activity-members" class="form-label">Players / Members Needed</label>
+                            <input type="number" id="activity-members" class="form-input" placeholder="e.g. 2" min="1" max="50" value="2" required>
+                        </div>
+                    </div>
 
-        <div class="dashboard-grid">
-            <section class="panel">
-                <h2>Post an Activity</h2>
-                <p class="muted">Create a post using your current location.</p>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="activity-venue" class="form-label">Venue / Location Name</label>
+                            <input type="text" id="activity-venue" class="form-input" placeholder="e.g. Decathlon Turf, Sector 62" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="activity-time" class="form-label">Date & Time</label>
+                            <input type="text" id="activity-time" class="form-input" placeholder="e.g. Today, 6:30 PM" required>
+                        </div>
+                    </div>
 
-                <form onsubmit="postActivity(event)">
-                    <label for="activity-type">Activity</label>
-                    <input type="text" id="activity-type" placeholder="Cricket, football, running" required>
+                    <div class="form-group">
+                        <label for="activity-contact" class="form-label">Contact Details (Shared with confirmed players)</label>
+                        <input type="text" id="activity-contact" class="form-input" placeholder="Phone, WhatsApp number, Instagram, or meeting point" required>
+                    </div>
 
-                    <label for="activity-description">Description</label>
-                    <input type="text" id="activity-description" placeholder="Need 2 players today evening" required>
+                    <div class="form-group">
+                        <label for="activity-description" class="form-label">Match Description</label>
+                        <textarea id="activity-description" class="form-textarea" rows="2" placeholder="e.g. Friendly 7v7 tennis ball match. Need 2 batsmen and 1 bowler. Equipment provided!" required></textarea>
+                    </div>
 
-                    <label for="activity-contact">Contact details</label>
-                    <input type="text" id="activity-contact" placeholder="Phone, email, Instagram, or meeting note" required>
-
-                    <label for="activity-skill">Skill level</label>
-                    <select id="activity-skill">
-                        <option value="beginner">Beginner</option>
-                        <option value="intermediate">Intermediate</option>
-                        <option value="advanced">Advanced</option>
-                    </select>
-
-                    <button class="btn primary" type="submit">Post activity</button>
+                    <button type="submit" class="btn btn-primary btn-full btn-lg" id="submit-post-btn">
+                        📍 Post Activity with My Location
+                    </button>
                 </form>
 
-                <p id="post-status" class="status-text"></p>
+                <div id="post-status" class="status-message"></div>
             </section>
 
-            <section class="panel">
-                <div class="section-title">
+            <!-- SUGGESTED RECOMMENDATIONS PANEL -->
+            <section class="app-panel">
+                <div class="panel-header">
                     <div>
-                        <h2>Suggested For You</h2>
-                        <p class="muted">Recommendations from nearby open posts.</p>
+                        <h2 class="panel-title">
+                            <span>🧠</span> AI Recommendations
+                        </h2>
+                        <p class="panel-subtitle">Hybrid ranked matches based on your activity history</p>
                     </div>
-                    <button class="btn light" onclick="getRecommendations()">Find</button>
+                    <button class="btn btn-secondary btn-sm" onclick="getRecommendations()">Find Suggestions</button>
                 </div>
-                <ul id="recommendation-list" class="post-list"></ul>
+
+                <ul id="recommendation-list" class="activity-card-list">
+                    <li class="empty-state-box">Click "Find Suggestions" to fetch nearby matches.</li>
+                </ul>
             </section>
         </div>
 
-        <section class="panel">
-            <div class="section-title">
+        <!-- NEARBY ACTIVITIES PANEL -->
+        <section class="app-panel">
+            <div class="panel-header">
                 <div>
-                    <h2>Nearby Activities</h2>
-                    <p class="muted">Activities near your current location.</p>
+                    <h2 class="panel-title">
+                        <span>📍</span> Nearby Activities
+                    </h2>
+                    <p class="panel-subtitle">Matches within your dynamic geohash radius</p>
                 </div>
-                <button class="btn light" onclick="findNearby()">Show nearby</button>
+                <button class="btn btn-secondary btn-sm" onclick="findNearby()">Refresh Nearby</button>
             </div>
-            <p id="radius-status" class="status-text"></p>
-            <ul id="nearby-list" class="post-list"></ul>
+            <div id="radius-status" class="status-message" style="margin-bottom: 16px;"></div>
+            <ul id="nearby-list" class="activity-card-list">
+                <li class="empty-state-box">Click "Refresh Nearby" to search matches around your current coordinates.</li>
+            </ul>
         </section>
 
-        <section class="panel">
-            <div class="section-title">
+        <!-- RECENT ALL POSTS FEED -->
+        <section class="app-panel">
+            <div class="panel-header">
                 <div>
-                    <h2>Recent Posts</h2>
-                    <p class="muted">Newest posts from the community.</p>
+                    <h2 class="panel-title">
+                        <span>🌐</span> Community Feed
+                    </h2>
+                    <p class="panel-subtitle">Latest open activities posted across the network</p>
                 </div>
-                <button class="btn light" onclick="loadAllPosts()">Refresh</button>
+                <button class="btn btn-secondary btn-sm" onclick="loadAllPosts()">Refresh Feed</button>
             </div>
-            <ul id="posts-list" class="post-list"></ul>
+            <ul id="posts-list" class="activity-card-list">
+                <li class="empty-state-box">Loading open community matches...</li>
+            </ul>
         </section>
 
-        <section class="panel">
-            <div class="section-title">
+        <!-- USER'S OWN POSTS & REQUEST MANAGEMENT -->
+        <section class="app-panel">
+            <div class="panel-header">
                 <div>
-                    <h2>Your Posts</h2>
-                    <p class="muted">Edit, delete, or complete your own posts.</p>
+                    <h2 class="panel-title">
+                        <span>📋</span> Manage Your Posts & Requests
+                    </h2>
+                    <p class="panel-subtitle">Review join requests from other players, confirm participants, or complete posts</p>
                 </div>
-                <button class="btn light" onclick="loadMyPosts()">Refresh</button>
+                <button class="btn btn-secondary btn-sm" onclick="loadMyPosts()">Refresh My Posts</button>
             </div>
-            <p id="my-posts-status" class="status-text"></p>
-            <ul id="my-posts-list" class="post-list edit-list"></ul>
+            <div id="my-posts-status" class="status-message" style="margin-bottom: 16px;"></div>
+            <ul id="my-posts-list" class="activity-card-list">
+                <li class="empty-state-box">You haven't posted any activities yet.</li>
+            </ul>
         </section>
     </main>
 

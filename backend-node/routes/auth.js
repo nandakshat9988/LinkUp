@@ -19,21 +19,20 @@ function publicUser(user) {
   return {
     id: user._id,
     name: user.name,
-    email: user.email,
-    skillLevel: user.skillLevel
+    email: user.email
   };
 }
 
 // POST /api/auth/register — email + password signup
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, skillLevel } = req.body;
+    const { name, email, password } = req.body;
     if (await User.findOne({ email })) {
       return res.status(400).json({ error: 'Email already registered' });
     }
 
     const hashed = await bcrypt.hash(password, 10); // 10 salt rounds
-    const user = await User.create({ name, email, password: hashed, skillLevel });
+    const user = await User.create({ name, email, password: hashed });
 
     res.json({ token: signToken(user), user: publicUser(user) });
   } catch (err) {

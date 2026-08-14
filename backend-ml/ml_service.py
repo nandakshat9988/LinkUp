@@ -9,50 +9,52 @@ app = Flask(__name__)
 def health():
     return jsonify({"status": "ok", "service": "ml-service"})
 
-# Weights for the hybrid score. These are the "knobs" you'd tune based on
-# what actually matters to your product (e.g. weight proximity higher for a
-# "meet up right now" feature, weight content higher for a browse/discovery feed).
+# Hybrid scoring weights:
+# - W_GEO: Geographic proximity score
+# - W_COLLAB: Collaborative history match (activities similar to what user has joined)
+# - W_CONTENT: Semantic text similarity (TF-IDF + Cosine similarity)
 W_GEO = 0.4
 W_COLLAB = 0.3
 W_CONTENT = 0.3
-SKILL_MATCH_BONUS = 0.15
-
 
 @app.route('/recommend', methods=['POST'])
 def recommend():
-    data = request.json
+    data = request.json or {}
     radius_km = data.get('radiusKm', 10)
-    my_skill = data.get('skillLevel', 'beginner')
     history = data.get('history', [])       # activities this user has joined before
-    candidates = data.get('candidates', [])  # geo-filtered shortlist from MongoDB (Node)
+    candidates = data.get('candidates', [])  # geo-filtered shortlist from MongoDB
 
     if not candidates:
         return jsonify({"recommendations": []})
 
-    # Collaborative counts from user history
+    # 1. Collaborative frequency calculation from user engagement history
     type_counts = {}
     for h in history:
-        type_counts[h['activityType']] = type_counts.get(h['activityType'], 0) + 1
+        act_type = h.get('activityType')
+        if act_type:
+            type_counts[act_type] = type_counts.get(act_type, 0) + 1
     max_count = max(type_counts.values()) if type_counts else 1
 
-    # Content-based vector similarity (TF-IDF + cosine similarity)
-    history_text = " ".join(h['description'] for h in history) or my_skill
-    corpus = [history_text] + [c['description'] for c in candidates]
+    # 2. Content-based text similarity using TF-IDF and Cosine Similarity
+    history_text = " ".join(h.get('description', '') for h in history).strip() or "sports fitness workout recreation"
+    corpus = [history_text] + [c.get('description', '') for c in candidates]
+    
     tfidf_matrix = TfidfVectorizer(stop_words='english').fit_transform(corpus)
     similarities = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:]).flatten()
 
-    # Compute hybrid scores (Geospatial + Collaborative + Content + Skill bonus)
+    # 3. Calculate combined hybrid scores for each candidate
     for c, sim in zip(candidates, similarities):
-        distance_km = c['distanceMeters'] / 1000
-        c['geo_score'] = max(0, 1 - (distance_km / radius_km))
-        c['collab_score'] = type_counts.get(c['activityType'], 0) / max_count
-        c['content_score'] = float(sim)
-        c['skill_bonus'] = SKILL_MATCH_BONUS if c['skillLevel'] == my_skill else 0
-        c['score'] = (
-            W_GEO * c['geo_score']
-            + W_COLLAB * c['collab_score']
-            + W_CONTENT * c['content_score']
-            + c['skill_bonus']
+        distance_km = (c.get('distanceMeters') or 0) / 1000
+        geo_score = max(0, 1 - (distance_km / radius_km))
+        collab_score = type_counts.get(c.get('activityType'), 0) / max_count
+        content_score = float(sim)
+
+        c['geo_score'] = round(geo_score, 3)
+        c['collab_score'] = round(collab_score, 3)
+        c['content_score'] = round(content_score, 3)
+        c['score'] = round(
+            W_GEO * geo_score + W_COLLAB * collab_score + W_CONTENT * content_score,
+            3
         )
 
     ranked = sorted(candidates, key=lambda c: c['score'], reverse=True)

@@ -1,3 +1,4 @@
+// LinkUp Client-Side Logic
 const NODE_SERVER = window.API_BASE_URL || (
     window.location.protocol === 'file:' || (window.location.hostname === 'localhost' && window.location.port && window.location.port !== '3000')
         ? 'http://localhost:3000/api'
@@ -7,28 +8,39 @@ const NODE_SERVER = window.API_BASE_URL || (
 let authToken = localStorage.getItem('token');
 let currentUser = JSON.parse(localStorage.getItem('user') || 'null');
 
+// DOM Helpers
 function el(id) {
     return document.getElementById(id);
 }
 
 function value(id) {
-    return el(id).value.trim();
-}
-
-function setText(id, text) {
     const node = el(id);
-    if (node) node.innerText = text;
+    return node ? node.value.trim() : '';
 }
 
-function authHeaders(hasBody) {
+function showStatus(elementId, message, type = 'info') {
+    const node = el(elementId);
+    if (!node) return;
+    node.className = `status-message show ${type}`;
+    node.innerText = message;
+}
+
+function hideStatus(elementId) {
+    const node = el(elementId);
+    if (!node) return;
+    node.className = 'status-message';
+    node.innerText = '';
+}
+
+function authHeaders(hasBody = false) {
     const headers = {};
     if (hasBody) headers['Content-Type'] = 'application/json';
     if (authToken) headers.Authorization = `Bearer ${authToken}`;
     return headers;
 }
 
-async function sendRequest(path, options) {
-    const response = await fetch(`${NODE_SERVER}${path}`, options || {});
+async function sendRequest(path, options = {}) {
+    const response = await fetch(`${NODE_SERVER}${path}`, options);
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
@@ -48,6 +60,8 @@ function saveSession(token, user) {
 function logout() {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    authToken = null;
+    currentUser = null;
     window.location.href = 'login.html';
 }
 
@@ -56,19 +70,20 @@ function requireLogin() {
         window.location.href = 'login.html';
         return false;
     }
-
     return true;
 }
 
+/* ============================================================
+   AUTH: REGISTER & LOGIN
+   ============================================================ */
 async function register(event) {
     event.preventDefault();
-    setText('register-status', 'Creating account...');
+    showStatus('register-status', 'Creating your account...', 'info');
 
     const body = {
         name: value('register-name'),
         email: value('register-email'),
-        password: value('register-password'),
-        skillLevel: el('register-skill').value
+        password: value('register-password')
     };
 
     try {
@@ -79,15 +94,16 @@ async function register(event) {
         });
 
         saveSession(data.token, data.user);
-        window.location.href = 'dashboard.html';
+        showStatus('register-status', 'Account created! Redirecting...', 'success');
+        setTimeout(() => { window.location.href = 'dashboard.html'; }, 500);
     } catch (err) {
-        setText('register-status', err.message || 'Registration failed');
+        showStatus('register-status', err.message || 'Registration failed', 'error');
     }
 }
 
 async function login(event) {
     event.preventDefault();
-    setText('login-status', 'Signing in...');
+    showStatus('login-status', 'Signing in...', 'info');
 
     const body = {
         email: value('login-email'),
@@ -102,12 +118,16 @@ async function login(event) {
         });
 
         saveSession(data.token, data.user);
-        window.location.href = 'dashboard.html';
+        showStatus('login-status', 'Success! Opening dashboard...', 'success');
+        setTimeout(() => { window.location.href = 'dashboard.html'; }, 500);
     } catch (err) {
-        setText('login-status', err.message || 'Login failed. If you are new, click "Create an account" below.');
+        showStatus('login-status', err.message || 'Login failed. Check your email or password.', 'error');
     }
 }
 
+/* ============================================================
+   DASHBOARD INITIALIZATION & POSTING
+   ============================================================ */
 function startDashboard() {
     if (!requireLogin()) return;
     if (!currentUser) {
@@ -115,9 +135,9 @@ function startDashboard() {
         return;
     }
 
-    setText('current-user', currentUser.name);
-    setText('current-email', currentUser.email);
-    setText('current-skill', currentUser.skillLevel || 'beginner');
+    if (el('current-user')) el('current-user').innerText = currentUser.name;
+    if (el('current-email')) el('current-email').innerText = currentUser.email;
+    if (el('user-avatar-initial')) el('user-avatar-initial').innerText = (currentUser.name || 'U')[0].toUpperCase();
 
     loadAllPosts();
     loadMyPosts();
@@ -127,14 +147,21 @@ function postActivity(event) {
     event.preventDefault();
     if (!requireLogin()) return;
 
-    setText('post-status', 'Getting your location...');
+    showStatus('post-status', 'Detecting your location for accurate proximity matching...', 'info');
+
+    if (!navigator.geolocation) {
+        showStatus('post-status', 'Geolocation is not supported by your browser.', 'error');
+        return;
+    }
 
     navigator.geolocation.getCurrentPosition(async (position) => {
         const body = {
             activityType: value('activity-type'),
-            description: value('activity-description'),
+            membersRequired: parseInt(value('activity-members'), 10) || 1,
+            venue: value('activity-venue'),
+            time: value('activity-time'),
             contactDetails: value('activity-contact'),
-            skillLevel: el('activity-skill').value,
+            description: value('activity-description'),
             lat: position.coords.latitude,
             lng: position.coords.longitude
         };
@@ -147,40 +174,51 @@ function postActivity(event) {
             });
 
             event.target.reset();
-            setText('post-status', 'Activity posted.');
+            showStatus('post-status', 'Activity posted successfully!', 'success');
+            setTimeout(() => hideStatus('post-status'), 4000);
+
             loadAllPosts();
             loadMyPosts();
         } catch (err) {
-            setText('post-status', err.message);
+            showStatus('post-status', err.message, 'error');
         }
-    }, () => {
-        setText('post-status', 'Please allow location access to post.');
+    }, (geoErr) => {
+        showStatus('post-status', `Location error: ${geoErr.message}. Please allow location access.`, 'error');
     });
 }
 
+/* ============================================================
+   FEEDS & CARD RENDERING
+   ============================================================ */
 async function loadAllPosts() {
+    const list = el('posts-list');
+    if (!list) return;
+
     try {
         const posts = await sendRequest('/activities');
-        const list = el('posts-list');
-        if (!list) return;
-
         list.innerHTML = '';
 
-        if (posts.length === 0) {
-            addEmptyItem(list, 'No posts yet.');
+        if (!posts || posts.length === 0) {
+            list.innerHTML = '<li class="empty-state-box">No open activities found. Be the first to post!</li>';
             return;
         }
 
-        posts.forEach((post) => {
-            list.appendChild(makePostItem(post, 'recent'));
-        });
+        posts.forEach(post => list.appendChild(makeActivityCard(post, 'recent')));
     } catch (err) {
-        setText('radius-status', err.message);
+        list.innerHTML = `<li class="empty-state-box" style="color: var(--accent-rose);">Failed to load posts: ${err.message}</li>`;
     }
 }
 
 function findNearby() {
-    setText('radius-status', 'Getting your location...');
+    const list = el('nearby-list');
+    if (!list) return;
+
+    showStatus('radius-status', 'Getting your location...', 'info');
+
+    if (!navigator.geolocation) {
+        showStatus('radius-status', 'Geolocation not supported', 'error');
+        return;
+    }
 
     navigator.geolocation.getCurrentPosition(async (position) => {
         const lat = position.coords.latitude;
@@ -188,32 +226,30 @@ function findNearby() {
 
         try {
             const data = await sendRequest(`/activities/nearby?lat=${lat}&lng=${lng}`);
-            const list = el('nearby-list');
             list.innerHTML = '';
 
-            setText('radius-status', `Search radius: ${data.radiusKm} km. Found ${data.count} posts.`);
+            showStatus('radius-status', `Dynamic search radius: ${data.radiusKm} km. Found ${data.count} nearby matches.`, 'info');
 
             if (!data.activities || data.activities.length === 0) {
-                addEmptyItem(list, 'No nearby open activities found.');
+                list.innerHTML = '<li class="empty-state-box">No nearby activities found within your area.</li>';
                 return;
             }
 
-            data.activities.forEach((post) => {
-                list.appendChild(makePostItem(post, 'nearby'));
-            });
+            data.activities.forEach(post => list.appendChild(makeActivityCard(post, 'nearby')));
         } catch (err) {
-            setText('radius-status', err.message);
+            showStatus('radius-status', err.message, 'error');
         }
-    }, () => {
-        setText('radius-status', 'Please allow location access to search nearby.');
+    }, (geoErr) => {
+        showStatus('radius-status', `Location access denied: ${geoErr.message}`, 'error');
     });
 }
 
 function getRecommendations() {
     if (!requireLogin()) return;
     const list = el('recommendation-list');
-    list.innerHTML = '';
-    addEmptyItem(list, 'Getting your location...');
+    if (!list) return;
+
+    list.innerHTML = '<li class="empty-state-box">Locating and running hybrid recommendation scoring...</li>';
 
     navigator.geolocation.getCurrentPosition(async (position) => {
         const body = {
@@ -231,70 +267,134 @@ function getRecommendations() {
             list.innerHTML = '';
 
             if (!data.recommendations || data.recommendations.length === 0) {
-                addEmptyItem(list, 'No suggestions found right now.');
+                list.innerHTML = '<li class="empty-state-box">No recommendations right now. Try posting or joining matches to build history!</li>';
                 return;
             }
 
-            data.recommendations.forEach((post) => {
-                list.appendChild(makePostItem(post, 'suggested'));
-            });
+            data.recommendations.forEach(post => list.appendChild(makeActivityCard(post, 'suggested')));
         } catch (err) {
-            list.innerHTML = '';
-            addEmptyItem(list, err.message);
+            list.innerHTML = `<li class="empty-state-box" style="color: var(--accent-rose);">${err.message}</li>`;
         }
     }, () => {
-        list.innerHTML = '';
-        addEmptyItem(list, 'Please allow location access to get suggestions.');
+        list.innerHTML = '<li class="empty-state-box" style="color: var(--accent-rose);">Please allow location access to get recommendations.</li>';
     });
 }
 
 async function loadMyPosts() {
     if (!requireLogin()) return;
+    const list = el('my-posts-list');
+    if (!list) return;
 
     try {
         const posts = await sendRequest('/activities/mine', {
             headers: authHeaders()
         });
 
-        const list = el('my-posts-list');
-        if (!list) return;
-
         list.innerHTML = '';
 
-        if (posts.length === 0) {
-            addEmptyItem(list, 'You have not posted any activities yet.');
+        if (!posts || posts.length === 0) {
+            list.innerHTML = '<li class="empty-state-box">You haven\'t posted any activities yet.</li>';
             return;
         }
 
-        posts.forEach((post) => {
-            list.appendChild(makeEditItem(post));
-        });
+        posts.forEach(post => list.appendChild(makeMyPostCard(post)));
     } catch (err) {
-        setText('my-posts-status', err.message);
+        showStatus('my-posts-status', err.message, 'error');
     }
 }
 
-async function savePost(id) {
-    const body = {
-        activityType: value(`edit-type-${id}`),
-        description: value(`edit-description-${id}`),
-        contactDetails: value(`edit-contact-${id}`),
-        skillLevel: el(`edit-skill-${id}`).value
-    };
+/* ============================================================
+   CARD BUILDERS
+   ============================================================ */
+function makeActivityCard(post, source) {
+    const item = document.createElement('li');
+    item.className = 'activity-card';
 
-    try {
-        await sendRequest(`/activities/${id}`, {
-            method: 'PUT',
-            headers: authHeaders(true),
-            body: JSON.stringify(body)
-        });
+    const id = post._id || post.id;
+    const status = post.status || 'open';
+    const hostName = post.user?.name || 'Community Member';
+    const participantsCount = post.participants ? post.participants.length : 0;
+    const totalRequired = post.membersRequired || 1;
+    const venue = post.venue || 'Local Spot';
+    const time = post.time || 'Flexible';
 
-        setText('my-posts-status', 'Post updated.');
-        loadAllPosts();
-        loadMyPosts();
-    } catch (err) {
-        setText('my-posts-status', err.message);
+    let extraPill = '';
+    if (source === 'nearby') {
+        const meters = Math.round(post.distanceMeters || 0);
+        extraPill = `<span class="meta-pill score">⚡ ${meters < 1000 ? meters + ' m' : (meters/1000).toFixed(1) + ' km'} away</span>`;
+    } else if (source === 'suggested') {
+        const score = post.score ? post.score.toFixed(2) : '0.00';
+        extraPill = `<span class="meta-pill score">🧠 AI Score: ${score}</span>`;
     }
+
+    item.innerHTML = `
+        <div class="activity-card-top">
+            <div>
+                <span class="status-pill ${status}">${status}</span>
+                <h3 class="activity-badge-title" style="margin-top: 6px;">${post.activityType}</h3>
+            </div>
+            <span class="meta-pill capacity">👥 ${participantsCount} / ${totalRequired} Joined</span>
+        </div>
+
+        <p class="activity-desc-text">${post.description}</p>
+
+        <div class="activity-meta-pills">
+            <span class="meta-pill venue">📍 ${venue}</span>
+            <span class="meta-pill time">⏰ ${time}</span>
+            ${extraPill}
+        </div>
+
+        <div class="activity-card-bottom">
+            <span class="host-tag">Posted by <strong>${hostName}</strong></span>
+            <a href="activity.html?id=${id}" class="btn btn-primary btn-sm">
+                View & Join →
+            </a>
+        </div>
+    `;
+
+    return item;
+}
+
+function makeMyPostCard(post) {
+    const item = document.createElement('li');
+    item.className = 'activity-card';
+    const id = post._id || post.id;
+    const pendingCount = post.joinRequests ? post.joinRequests.length : 0;
+    const confirmedCount = post.participants ? post.participants.length : 0;
+    const totalRequired = post.membersRequired || 1;
+    const status = post.status || 'open';
+
+    item.innerHTML = `
+        <div class="activity-card-top">
+            <div>
+                <span class="status-pill ${status}">${status}</span>
+                <h3 class="activity-badge-title" style="margin-top: 6px;">${post.activityType}</h3>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                ${pendingCount > 0 ? `<span class="meta-pill" style="background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.35); color: #fbbf24;">🔔 ${pendingCount} Join Request${pendingCount > 1 ? 's' : ''}</span>` : ''}
+                <span class="meta-pill capacity">👥 ${confirmedCount} / ${totalRequired} Confirmed</span>
+            </div>
+        </div>
+
+        <p class="activity-desc-text">${post.description}</p>
+
+        <div class="activity-meta-pills">
+            <span class="meta-pill venue">📍 ${post.venue || 'Venue not set'}</span>
+            <span class="meta-pill time">⏰ ${post.time || 'Time not set'}</span>
+        </div>
+
+        <div class="activity-card-bottom" style="flex-wrap: wrap;">
+            <a href="activity.html?id=${id}" class="btn btn-primary btn-sm">
+                Manage Requests & Details (${pendingCount} Pending) →
+            </a>
+            <div style="display: flex; gap: 8px;">
+                ${status !== 'completed' ? `<button class="btn btn-secondary btn-sm" onclick="completePost('${id}')">Mark Complete</button>` : ''}
+                <button class="btn btn-danger btn-sm" onclick="deletePost('${id}')">Delete</button>
+            </div>
+        </div>
+    `;
+
+    return item;
 }
 
 async function completePost(id) {
@@ -303,204 +403,225 @@ async function completePost(id) {
             method: 'PATCH',
             headers: authHeaders()
         });
-
-        setText('my-posts-status', 'Post marked as completed.');
+        showStatus('my-posts-status', 'Activity marked as completed.', 'success');
         loadAllPosts();
         loadMyPosts();
     } catch (err) {
-        setText('my-posts-status', err.message);
+        showStatus('my-posts-status', err.message, 'error');
     }
 }
 
 async function deletePost(id) {
-    const shouldDelete = confirm('Delete this post?');
-    if (!shouldDelete) return;
+    if (!confirm('Are you sure you want to delete this activity post?')) return;
 
     try {
         await sendRequest(`/activities/${id}`, {
             method: 'DELETE',
             headers: authHeaders()
         });
-
-        setText('my-posts-status', 'Post deleted.');
+        showStatus('my-posts-status', 'Activity post deleted.', 'info');
         loadAllPosts();
         loadMyPosts();
     } catch (err) {
-        setText('my-posts-status', err.message);
+        showStatus('my-posts-status', err.message, 'error');
     }
 }
 
-async function joinActivity(id) {
-    if (!authToken) {
-        window.location.href = 'login.html';
+/* ============================================================
+   SINGLE ACTIVITY DETAILS & JOIN PAGE (ACTIVITY.HTML)
+   ============================================================ */
+async function loadActivityDetailPage() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const activityId = urlParams.get('id');
+
+    if (!activityId) {
+        if (el('detail-description')) {
+            el('detail-description').innerText = 'Error: No activity ID provided in URL.';
+        }
         return;
     }
 
     try {
-        const post = await sendRequest(`/activities/${id}/join`, {
+        const activity = await sendRequest(`/activities/${activityId}`);
+        renderActivityDetails(activity);
+    } catch (err) {
+        if (el('detail-description')) {
+            el('detail-description').innerText = `Error loading activity: ${err.message}`;
+        }
+    }
+}
+
+function renderActivityDetails(activity) {
+    const id = activity._id;
+    const host = activity.user || {};
+    const hostId = host._id || host.id || host;
+    const isHost = currentUser && hostId.toString() === currentUser.id;
+    const isConfirmed = currentUser && (activity.participants || []).some(p => (p._id || p).toString() === currentUser.id);
+    const isRequested = currentUser && (activity.joinRequests || []).some(r => (r._id || r).toString() === currentUser.id);
+
+    const confirmedCount = (activity.participants || []).length;
+    const totalRequired = activity.membersRequired || 1;
+    const percentCapacity = Math.min(100, Math.round((confirmedCount / totalRequired) * 100));
+
+    // Populate basic info
+    if (el('detail-activity-type')) el('detail-activity-type').innerText = activity.activityType;
+    if (el('detail-status-pill')) {
+        el('detail-status-pill').className = `status-pill ${activity.status || 'open'}`;
+        el('detail-status-pill').innerText = activity.status || 'open';
+    }
+    if (el('detail-description')) el('detail-description').innerText = activity.description;
+    if (el('detail-venue')) el('detail-venue').innerText = activity.venue || 'Not specified';
+    if (el('detail-time')) el('detail-time').innerText = activity.time || 'Not specified';
+    if (el('detail-host-name')) el('detail-host-name').innerText = host.name || 'Community Member';
+    if (el('detail-host-badge')) el('detail-host-badge').innerText = `Host: ${host.name || 'Host'}`;
+    if (el('detail-capacity')) el('detail-capacity').innerText = `${confirmedCount} / ${totalRequired} Players Confirmed`;
+    if (el('detail-capacity-bar')) el('detail-capacity-bar').style.width = `${percentCapacity}%`;
+
+    const heading = el('action-heading');
+    const desc = el('action-description');
+    const buttonsGroup = el('action-buttons-group');
+    const hostContainer = el('host-management-container');
+    const contactBox = el('confirmed-contact-box');
+
+    buttonsGroup.innerHTML = '';
+
+    // If viewer is the HOST
+    if (isHost) {
+        heading.innerText = 'You are the Host of this Activity';
+        desc.innerText = 'Review join requests from other players below and confirm participants to fill your match.';
+
+        if (activity.status !== 'completed') {
+            const completeBtn = document.createElement('button');
+            completeBtn.className = 'btn btn-secondary btn-sm';
+            completeBtn.innerText = 'Mark Activity as Completed';
+            completeBtn.onclick = async () => {
+                await sendRequest(`/activities/${id}/complete`, { method: 'PATCH', headers: authHeaders() });
+                loadActivityDetailPage();
+            };
+            buttonsGroup.appendChild(completeBtn);
+        }
+
+        // Render pending requests list for host
+        hostContainer.style.display = 'block';
+        const reqList = el('host-requests-list');
+        const partList = el('host-participants-list');
+
+        reqList.innerHTML = '';
+        if (activity.joinRequests && activity.joinRequests.length > 0) {
+            activity.joinRequests.forEach(reqUser => {
+                const reqItem = document.createElement('div');
+                reqItem.className = 'user-request-item';
+                reqItem.innerHTML = `
+                    <div class="user-request-info">
+                        <strong>${reqUser.name || 'Player'}</strong>
+                        <small>${reqUser.email || ''}</small>
+                    </div>
+                    <button class="btn btn-success btn-sm" onclick="confirmParticipant('${id}', '${reqUser._id}')">
+                        ✅ Confirm & Add to Match
+                    </button>
+                `;
+                reqList.appendChild(reqItem);
+            });
+        } else {
+            reqList.innerHTML = '<p class="form-hint">No pending join requests right now.</p>';
+        }
+
+        // Render confirmed participants for host
+        partList.innerHTML = '';
+        if (activity.participants && activity.participants.length > 0) {
+            activity.participants.forEach(pUser => {
+                const pItem = document.createElement('div');
+                pItem.className = 'user-request-item';
+                pItem.innerHTML = `
+                    <div class="user-request-info">
+                        <strong>${pUser.name || 'Player'}</strong>
+                        <small>${pUser.email || ''}</small>
+                    </div>
+                    <span class="status-pill open">Confirmed</span>
+                `;
+                partList.appendChild(pItem);
+            });
+        } else {
+            partList.innerHTML = '<p class="form-hint">No confirmed players yet.</p>';
+        }
+
+        return;
+    }
+
+    // If viewer is NOT the host
+    hostContainer.style.display = 'none';
+
+    if (!authToken) {
+        heading.innerText = 'Want to join this match?';
+        desc.innerText = 'Please sign in or create an account to view host details and request to join.';
+        buttonsGroup.innerHTML = `<a href="login.html" class="btn btn-primary">Login to Join</a>`;
+        return;
+    }
+
+    if (isConfirmed) {
+        heading.innerText = 'You are in!';
+        desc.innerText = 'The host has confirmed your spot in this match. Connect with them below:';
+        contactBox.style.display = 'block';
+        el('revealed-contact-text').innerHTML = `
+            <strong>Host Name:</strong> ${host.name || 'Host'}<br>
+            <strong>Host Email:</strong> ${host.email || 'None'}<br>
+            <strong>Contact Info / Instructions:</strong> ${activity.contactDetails || 'No additional contact notes provided.'}
+        `;
+        return;
+    }
+
+    if (isRequested) {
+        heading.innerText = 'Join Request Pending';
+        desc.innerText = `You have submitted a join request. Once ${host.name || 'the host'} confirms your request, your spot will be secured and host contact details will appear here.`;
+        buttonsGroup.innerHTML = `<button class="btn btn-secondary" disabled>⏳ Awaiting Host Confirmation</button>`;
+        return;
+    }
+
+    if (activity.status === 'completed' || confirmedCount >= totalRequired) {
+        heading.innerText = 'Activity Full / Completed';
+        desc.innerText = 'All member slots for this activity have been filled or the match is completed.';
+        buttonsGroup.innerHTML = `<button class="btn btn-secondary" disabled>Match Completed</button>`;
+        return;
+    }
+
+    // Default: Open for request
+    heading.innerText = 'Request to Join this Activity';
+    desc.innerText = `You are requesting to join ${activity.activityType} hosted by ${host.name || 'a member'}. The host will review and confirm your spot.`;
+
+    const joinBtn = document.createElement('button');
+    joinBtn.className = 'btn btn-primary btn-lg';
+    joinBtn.id = 'confirm-join-btn';
+    joinBtn.innerText = '🤝 Confirm & Send Join Request';
+    joinBtn.onclick = () => submitJoinRequest(id);
+    buttonsGroup.appendChild(joinBtn);
+}
+
+async function submitJoinRequest(activityId) {
+    showStatus('action-status', 'Sending join request to host...', 'info');
+
+    try {
+        const response = await sendRequest(`/activities/${activityId}/request-join`, {
             method: 'POST',
             headers: authHeaders()
         });
 
-        showJoinDetails(post);
-        loadAllPosts();
-        loadMyPosts();
+        showStatus('action-status', 'Join request submitted! Waiting for host confirmation.', 'success');
+        renderActivityDetails(response.activity);
     } catch (err) {
-        showJoinMessage(err.message);
+        showStatus('action-status', err.message, 'error');
     }
 }
 
-function makePostItem(post, source) {
-    const item = document.createElement('li');
-    const textBox = document.createElement('div');
-    const title = document.createElement('strong');
-    const description = document.createElement('span');
-    const meta = document.createElement('small');
-    const button = document.createElement('button');
+async function confirmParticipant(activityId, userId) {
+    try {
+        const response = await sendRequest(`/activities/${activityId}/confirm-participant`, {
+            method: 'POST',
+            headers: authHeaders(true),
+            body: JSON.stringify({ userId })
+        });
 
-    const id = post._id || post.id;
-    const status = post.status || 'open';
-    const host = post.user?.name || 'Someone';
-    const skill = post.skillLevel || 'beginner';
-
-    title.innerText = `${post.activityType} - ${status}`;
-    description.innerText = post.description;
-    meta.innerText = getPostMeta(post, source, host, skill);
-
-    textBox.className = 'post-text';
-    textBox.appendChild(title);
-    textBox.appendChild(description);
-    textBox.appendChild(meta);
-
-    button.className = 'btn small';
-    button.innerText = getJoinButtonText(post);
-    button.disabled = !canShowJoinButton(post);
-    button.onclick = () => joinActivity(id);
-
-    item.appendChild(textBox);
-    item.appendChild(button);
-    return item;
-}
-
-function getPostMeta(post, source, host, skill) {
-    if (source === 'nearby') {
-        const meters = Math.round(post.distanceMeters || 0);
-        return `${skill} skill - ${meters} m away`;
+        renderActivityDetails(response.activity);
+    } catch (err) {
+        alert(`Failed to confirm participant: ${err.message}`);
     }
-
-    if (source === 'suggested') {
-        const score = post.score ? post.score.toFixed(2) : '0.00';
-        return `${skill} skill - score ${score}`;
-    }
-
-    return `Posted by ${host} - ${skill} skill`;
-}
-
-function canShowJoinButton(post) {
-    if ((post.status || 'open') === 'completed') return false;
-    if (!currentUser || !post.user) return true;
-
-    const ownerId = post.user._id || post.user;
-    return ownerId !== currentUser.id;
-}
-
-function getJoinButtonText(post) {
-    if ((post.status || 'open') === 'completed') return 'Completed';
-    if (!canShowJoinButton(post)) return 'Your post';
-    return 'Join';
-}
-
-function makeEditItem(post) {
-    const item = document.createElement('li');
-    const form = document.createElement('div');
-    const actions = document.createElement('div');
-    const id = post._id;
-
-    form.className = 'edit-form';
-    actions.className = 'action-row';
-
-    form.appendChild(makeInput(`edit-type-${id}`, post.activityType));
-    form.appendChild(makeInput(`edit-description-${id}`, post.description));
-    form.appendChild(makeInput(`edit-contact-${id}`, post.contactDetails || ''));
-    form.appendChild(makeSkillSelect(`edit-skill-${id}`, post.skillLevel));
-
-    actions.appendChild(makeActionButton('Save', () => savePost(id)));
-    actions.appendChild(makeActionButton('Complete', () => completePost(id), post.status === 'completed'));
-    actions.appendChild(makeActionButton('Delete', () => deletePost(id)));
-
-    item.appendChild(makeStatusText(post));
-    item.appendChild(form);
-    item.appendChild(actions);
-    return item;
-}
-
-function makeInput(id, text) {
-    const input = document.createElement('input');
-    input.id = id;
-    input.value = text || '';
-    return input;
-}
-
-function makeSkillSelect(id, selectedSkill) {
-    const select = document.createElement('select');
-    const skills = ['beginner', 'intermediate', 'advanced'];
-
-    select.id = id;
-
-    skills.forEach((skill) => {
-        const option = document.createElement('option');
-        option.value = skill;
-        option.innerText = skill;
-        option.selected = skill === selectedSkill;
-        select.appendChild(option);
-    });
-
-    return select;
-}
-
-function makeStatusText(post) {
-    const status = document.createElement('small');
-    const count = post.participants ? post.participants.length : 0;
-    status.innerText = `Status: ${post.status || 'open'} - Joined users: ${count}`;
-    return status;
-}
-
-function makeActionButton(text, onClick, disabled) {
-    const button = document.createElement('button');
-    button.className = 'btn small';
-    button.innerText = text;
-    button.disabled = disabled;
-    button.onclick = onClick;
-    return button;
-}
-
-function showJoinDetails(post) {
-    const joinedUsers = post.participants || [];
-    const hostName = post.user?.name || 'Unknown host';
-    const savedContact = post.contactDetails || post.user?.email || 'No contact details saved';
-
-    el('join-details').style.display = 'block';
-    setText('join-title', post.activityType);
-    setText('join-description', post.description);
-    setText('join-host', `Host: ${hostName}`);
-    setText('join-contact', `Contact: ${savedContact}`);
-    setText('join-skill', `Skill: ${post.skillLevel || 'beginner'}`);
-    setText('join-players', `Joined users: ${joinedUsers.length}`);
-}
-
-function showJoinMessage(message) {
-    el('join-details').style.display = 'block';
-    setText('join-title', 'Join message');
-    setText('join-description', message);
-    setText('join-host', '');
-    setText('join-contact', '');
-    setText('join-skill', '');
-    setText('join-players', '');
-}
-
-function addEmptyItem(list, text) {
-    const item = document.createElement('li');
-    item.className = 'empty-item';
-    item.innerText = text;
-    list.appendChild(item);
 }

@@ -3,14 +3,12 @@ const mongoose = require('mongoose');
 const activitySchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 
-  activityType: { type: String, required: true },   // e.g. "cricket", "running"
-  description: { type: String, required: true },    // e.g. "Need 2 players for box cricket"
-  contactDetails: { type: String, default: '' },    // Contact info shared with users who join
-  skillLevel: {
-    type: String,
-    enum: ['beginner', 'intermediate', 'advanced'],
-    default: 'beginner'
-  },
+  activityType: { type: String, required: true },   // e.g. "Cricket", "Football", "Running"
+  description: { type: String, required: true },    // e.g. "Need 2 players for friendly weekend match"
+  venue: { type: String, required: true },          // e.g. "Decathlon Turf, Central Park"
+  time: { type: String, required: true },           // e.g. "Saturday at 6:00 PM"
+  membersRequired: { type: Number, default: 1, min: 1 }, // Total number of players/members needed
+  contactDetails: { type: String, default: '' },    // Shared with confirmed participants
 
   status: {
     type: String,
@@ -25,8 +23,10 @@ const activitySchema = new mongoose.Schema({
     coordinates: { type: [Number], required: true }
   },
 
-  // Users who joined this activity. This is what powers collaborative
-  // filtering later: "users who joined X also tend to join Y".
+  // Users waiting for host confirmation to join
+  joinRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+
+  // Users who have been confirmed by the post creator
   participants: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 
   completedAt: { type: Date },

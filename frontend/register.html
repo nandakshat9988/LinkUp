@@ -3,38 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Register - LinkUp</title>
+    <title>Create Account - LinkUp</title>
+    <meta name="description" content="Join LinkUp to share and discover local sports activities and matches.">
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="center-page">
-    <main class="auth-box">
-        <p class="eyebrow">LINKUP</p>
-        <h1>Register</h1>
-        <p class="muted">Create your account and choose your activity skill level.</p>
+<body>
+    <div class="auth-page-container">
+        <main class="auth-card">
+            <header class="auth-header">
+                <a href="index.html" class="brand-logo">
+                    <div class="logo-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                        </svg>
+                    </div>
+                    <span class="brand-text">LinkUp</span>
+                </a>
+                <h1 class="auth-title">Create an Account</h1>
+                <p class="auth-subtitle">Join players in your area and play matches</p>
+            </header>
 
-        <form onsubmit="register(event)">
-            <label for="register-name">Name</label>
-            <input type="text" id="register-name" placeholder="Your name" required>
+            <form onsubmit="register(event)" id="register-form">
+                <div class="form-group">
+                    <label for="register-name" class="form-label">Full Name</label>
+                    <input type="text" id="register-name" class="form-input" placeholder="e.g. John Doe" required autocomplete="name">
+                </div>
 
-            <label for="register-email">Email</label>
-            <input type="email" id="register-email" placeholder="you@example.com" required>
+                <div class="form-group">
+                    <label for="register-email" class="form-label">Email Address</label>
+                    <input type="email" id="register-email" class="form-input" placeholder="you@example.com" required autocomplete="email">
+                </div>
 
-            <label for="register-password">Password</label>
-            <input type="password" id="register-password" placeholder="Create a password" required>
+                <div class="form-group">
+                    <label for="register-password" class="form-label">Password</label>
+                    <input type="password" id="register-password" class="form-input" placeholder="Create a secure password" required autocomplete="new-password">
+                </div>
 
-            <label for="register-skill">Skill level</label>
-            <select id="register-skill">
-                <option value="beginner">Beginner</option>
-                <option value="intermediate">Intermediate</option>
-                <option value="advanced">Advanced</option>
-            </select>
+                <button type="submit" class="btn btn-primary btn-full btn-lg" id="register-submit-btn" style="margin-top: 10px;">
+                    Create Account
+                </button>
+            </form>
 
-            <button class="btn primary" type="submit">Create account</button>
-        </form>
+            <div id="register-status" class="status-message"></div>
 
-        <p id="register-status" class="status-text"></p>
-        <p class="page-link">Already have an account? <a href="login.html">Login</a></p>
-    </main>
+            <footer class="auth-footer">
+                <p>Already have an account? <a href="login.html">Sign in</a></p>
+                <p style="margin-top: 10px;"><a href="index.html" style="color: var(--text-muted); font-size: 13px;">← Back to Home</a></p>
+            </footer>
+        </main>
+    </div>
 
     <script src="app.js"></script>
 </body>

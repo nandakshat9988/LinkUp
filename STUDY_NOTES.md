@@ -1,21 +1,27 @@
 # Study Notes — What Changed & Why
 
-This doc is a plain-English cheat sheet explaining the core architecture, mechanisms, and deployment strategies of LinkUp.
+This document is a plain-English study guide explaining the core architecture, data schemas, recommendation algorithms, and deployment strategies of LinkUp.
 
 ---
 
-## 1. Geospatial Indexing (MongoDB 2dsphere)
+## 1. Geospatial Proximity Indexing (MongoDB 2dsphere)
 
-**Files:** `backend-node/models/Activity.js`, `backend-node/utils/geo.js`, `backend-node/routes/activities.js` (`/nearby`), `backend-node/routes/recommendations.js`
+**Files:** `backend-node/models/Activity.js`, `backend-node/utils/geo.js`, `backend-node/routes/activities.js` (`/nearby`)
 
-**The problem it solves:** keeping posts in a JS array and scanning every post to compute distances is an **O(N)** operation. At scale (thousands or millions of posts), full-table scans grind the database to a halt.
+**The problem it solves:**
+If activities are stored without a spatial index, calculating the distance to every post in JavaScript requires scanning every single document (**O(N)** full-table scan). With thousands or millions of active posts, the database server would crash.
 
-**The fix:**
-- Activities store `location` as a GeoJSON `Point`: `{ type: 'Point', coordinates: [lng, lat] }`.
-  **Order matters — it's `[longitude, latitude]`, the opposite of standard conversational order.**
-- `activitySchema.index({ location: '2dsphere' })` builds a spherical index that accounts for Earth's curvature.
-- Under the hood, MongoDB's 2dsphere index uses a hierarchical spatial grid (geohashing) so nearby points share common prefix keys in a B-tree. This transforms proximity search into an **O(log N)** index traversal.
-- `$geoNear` (aggregation stage) is used because it calculates `distanceField` (meters from the user) automatically alongside index-accelerated filtering.
+**How it is implemented:**
+- Activities store their location as a GeoJSON `Point`:
+  ```javascript
+  location: {
+    type: { type: String, enum: ['Point'], default: 'Point' },
+    coordinates: [longitude, latitude] // IMPORTANT: [lng, lat], not [lat, lng]
+  }
+  ```
+- `activitySchema.index({ location: '2dsphere' })` builds a spherical index accounting for Earth's curvature.
+- Under the hood, MongoDB uses a hierarchical spatial grid (geohashing) to index coordinates into a B-tree, turning proximity queries into an **O(log N)** tree search.
+- The `$geoNear` aggregation pipeline stage calculates exact `distanceMeters` automatically alongside index-accelerated spatial filtering.
 
 ---
 
@@ -23,86 +29,130 @@ This doc is a plain-English cheat sheet explaining the core architecture, mechan
 
 **File:** `backend-node/utils/geo.js` (`getDynamicRadiusKm`)
 
-**The concept:** a 5km search radius in a dense metro area might return too many noisy results, while a 5km radius in a suburban or rural area might return zero. The search radius adapts based on local activity density.
+**The concept:**
+A fixed 5km search radius in a dense metro area returns too many noisy results, while a fixed 5km radius in a suburban or rural area might return zero. LinkUp automatically adjusts the search radius based on local activity density.
 
-**Implementation:**
+**Algorithm:**
 1. Execute a lightweight probe query: count activities within a 5km radius of the user's coordinates.
-2. Map count to a density tier:
-   - **Dense (8+ activities):** 2km radius
-   - **Medium (3-7 activities):** 7km radius
-   - **Sparse (0-2 activities):** 15km radius
+2. Match the count to a density tier:
+   - **Dense / Urban (8+ activities):** 2km radius
+   - **Medium Density (3–7 activities):** 7km radius
+   - **Sparse / Rural (0–2 activities):** 15km radius
 
 ---
 
-## 3. Hybrid Recommendation Engine
+## 3. Streamlined Hybrid Recommendation Engine
 
-**Files:** `backend-node/routes/recommendations.js` (Node API), `backend-ml/ml_service.py` (Python ML microservice)
+**Files:** `backend-node/routes/recommendations.js`, `backend-ml/ml_service.py`
 
-**Architecture Pattern — Candidate Generation & Ranking:**
-Geo filtering is cheap and index-backed in MongoDB/Node. It filters millions of records down to ~30 nearby candidates. Only this shortlist is sent to Python for scoring.
+**Candidate Generation & Ranking Pattern:**
+Geo filtering in MongoDB is cheap and index-backed. It filters millions of records down to ~30 nearby candidates. Only this shortlist is sent to Python for scoring.
 
-| Signal | What it measures | Where it's computed |
+| Signal | What it measures | Where it is computed |
 | :--- | :--- | :--- |
-| `geo_score` | Proximity to user (normalized 0-1 against radius) | Node (Mongo `$geoNear`) |
+| `geo_score` | Proximity to user (normalized 0–1 against radius) | Node (Mongo `$geoNear`) |
 | `collab_score` | Activity types user has engaged with before | Python |
-| `content_score` | Text similarity between past activities & candidate description | Python (`TfidfVectorizer` + `cosine_similarity`) |
-| `skill_bonus` | Matching user's skill level (beginner/intermediate/advanced) | Python / Node fallback |
+| `content_score` | Semantic text similarity between past activities & post description | Python (`TfidfVectorizer` + `cosine_similarity`) |
 
-**Combined Score Formula:**
-`Score = (0.4 * geo) + (0.3 * collab) + (0.3 * content) + skill_bonus`
+**Hybrid Score Formula:**
+```text
+Score = (0.4 * geo_score) + (0.3 * collab_score) + (0.3 * content_score)
+```
 
 **Resilience & Graceful Fallback:**
-If the Python microservice is offline or not deployed, Node automatically executes `fallbackRecommendations()`, ranking by distance and skill level so user experience is never interrupted.
+If the Python ML microservice is offline or unreachable, the Node backend automatically executes `fallbackRecommendations()`, ranking candidate posts by proximity so user experience is never interrupted.
 
 ---
 
-## 4. Auth & Security
+## 4. Activity Posts & 2-Step Join Confirmation Workflow
+
+**Files:** `backend-node/models/Activity.js`, `backend-node/routes/activities.js`, `frontend/activity.html`, `frontend/app.js`
+
+### Activity Data Schema
+Every activity post includes:
+- `activityType` *(String)*: e.g. "Cricket", "Football", "Running"
+- `description` *(String)*: Match details & notes
+- `venue` *(String)*: Venue or meeting point (e.g. "Decathlon Turf, Sector 62")
+- `time` *(String)*: Scheduled date & time (e.g. "Saturday at 6:00 PM")
+- `membersRequired` *(Number)*: Total number of players needed (e.g. 4)
+- `contactDetails` *(String)*: Phone, WhatsApp, or Instagram info (revealed only to confirmed players)
+- `location` *(GeoJSON Point)*: `[longitude, latitude]`
+- `joinRequests` *(Array of User IDs)*: Users waiting for host approval
+- `participants` *(Array of User IDs)*: Users confirmed by the host
+- `status` *(String)*: `'open'` or `'completed'`
+
+### Workflow Flowchart
+
+```
+User browses activity
+         │
+         ▼
+Clicks "View & Join" ──► Opens activity.html?id=...
+         │
+         ▼
+Clicks "Confirm & Send Join Request"
+         │
+         ▼
+User added to activity.joinRequests (Status: Pending)
+         │
+         ▼
+Host views pending requests on activity.html or Dashboard
+         │
+         ▼
+Host clicks "Confirm & Add to Match"
+         │
+         ├── User moved from joinRequests to participants
+         │
+         ├── Host contact details unlocked & revealed to confirmed user
+         │
+         └── If participants.length >= membersRequired:
+                 Activity status automatically set to "completed"
+```
+
+---
+
+## 5. Auth & Security
 
 **Files:** `backend-node/models/User.js`, `backend-node/middleware/auth.js`, `backend-node/middleware/rateLimiter.js`, `backend-node/routes/auth.js`
 
-### JWT (JSON Web Tokens)
-- Stateless authentication: user ID, name, and email are signed with `JWT_SECRET`.
-- Sent via `Authorization: Bearer <token>`.
+### Stateless JWT Authentication
 - Passwords are salted and hashed using `bcryptjs` (`bcrypt.hash(password, 10)`).
+- On login/register, the server signs a JSON Web Token (JWT) containing `{ id, name, email }`.
+- The client sends the token in the `Authorization: Bearer <token>` header for all authenticated routes.
 
-### Rate Limiting & Graceful Store Fallback
-- Protected endpoints: `/api/activities` and `/api/recommendations` (prevents scraping coordinate data).
-- Uses `express-rate-limit` with `rate-limit-redis`.
-- **Graceful Fallback:** If `REDIS_URL` is omitted (e.g. on free cloud hosting), it automatically uses in-memory tracking without throwing exceptions or blocking requests.
+### Location Endpoint Rate Limiting
+- Endpoints returning location coordinates (`/api/activities`, `/api/recommendations`) are protected by `express-rate-limit`.
+- Uses Redis store (`rate-limit-redis`) when `REDIS_URL` is set, and automatically falls back to an in-memory store if Redis is unavailable.
 
 ---
 
-## 5. Cloud Deployment Architecture (Render)
+## 6. Cloud Deployment Architecture (Render)
 
 **Files:** `backend-node/server.js`, `frontend/app.js`, `package.json`, `render.yaml`
 
 ### Unified Web Service Model
-Instead of deploying frontend and backend as separate services, Express serves both:
+Express handles both the REST API and the static frontend assets:
 1. **API Endpoints:** `/api/auth`, `/api/activities`, `/api/recommendations`, `/api/health`
-2. **Static Assets:** `frontend/` (`index.html`, `dashboard.html`, `style.css`, `app.js`)
+2. **Static Assets:** `frontend/` (`index.html`, `login.html`, `register.html`, `dashboard.html`, `activity.html`, `style.css`, `app.js`)
 
-**Benefits:**
-- **Zero CORS Configuration:** Requests to `/api/*` run on the exact same origin.
-- **Cost Effective:** Requires only 1 single free Web Service on Render.
+**Key Advantages:**
+- **Zero CORS Configuration:** Frontend and API share the exact same origin.
+- **Single Free Service:** Runs on 1 single free Web Service on Render.
 - **Dynamic Port Binding:** Express dynamically listens on `process.env.PORT || 3000`.
-- **Dynamic API Base:** `frontend/app.js` checks environment: uses `/api` in production and `http://localhost:3000/api` when testing standalone files.
 
 ---
 
-## 6. Render Web Service Configuration Cheat Sheet
+## 7. Render Deployment Cheat Sheet
 
 When creating a new Web Service in the Render Dashboard:
 
-| Section | Setting / Value | Explanation |
+| Setting | Recommended Value | Explanation |
 | :--- | :--- | :--- |
 | **Repository** | `your-username/LinkUp` | Connect your GitHub repository |
-| **Name** | `linkup-app` | URL becomes `https://linkup-app.onrender.com` |
-| **Region** | Oregon (US West) / Singapore / Frankfurt | Choose closest to your users |
-| **Branch** | `main` (or `master`) | Branch to deploy from |
-| **Root Directory** | *(Leave blank)* or `backend-node` | Root `package.json` coordinates subfolder builds |
-| **Runtime** | `Node` | Node.js environment |
-| **Build Command** | `npm install && npm run build` | Installs root & backend-node dependencies |
-| **Start Command** | `npm start` | Runs `node backend-node/server.js` |
+| **Name** | `linkup-app` | Yields `https://linkup-app.onrender.com` |
+| **Runtime** | `Node` | Node.js runtime |
+| **Build Command** | `npm install && npm run build` | Builds dependencies |
+| **Start Command** | `npm start` | Launches `node backend-node/server.js` |
 | **Plan** | `Free` | $0/month free tier |
 
 ### Environment Variables
@@ -112,6 +162,6 @@ When creating a new Web Service in the Render Dashboard:
 | `MONGO_URI` | `mongodb+srv://<user>:<pwd>@cluster.mongodb.net/linkup?retryWrites=true&w=majority` | Connects to MongoDB Atlas |
 | `JWT_SECRET` | 32+ character random string | Signs authentication tokens |
 | `NODE_ENV` | `production` | Optimizes Express performance |
-| `REDIS_URL` | *(Optional)* Upstash or Render Redis URL | If omitted, in-memory rate limiting is used |
+| `REDIS_URL` | *(Optional)* Upstash or Redis URL | If omitted, in-memory rate limiting is used |
 | `GOOGLE_CLIENT_ID` | *(Optional)* Google OAuth Client ID | Required only if testing Google Sign-in |
 | `ML_SERVICE_URL` | *(Optional)* Python ML microservice URL | If omitted, fallback recommender is used |
