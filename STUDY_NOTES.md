@@ -152,16 +152,31 @@ Host clicks "Confirm & Add to Match"
 
 ## 6. Auth & Security
 
-**Files:** `backend-node/models/User.js`, `backend-node/middleware/auth.js`, `backend-node/middleware/rateLimiter.js`, `backend-node/routes/auth.js`
+**Files:** `backend-node/models/User.js`, `backend-node/models/Otp.js`, `backend-node/utils/mailer.js`, `backend-node/middleware/auth.js`, `backend-node/middleware/rateLimiter.js`, `backend-node/routes/auth.js`
 
-### Stateless JWT Authentication
-- Passwords are salted and hashed using `bcryptjs` (`bcrypt.hash(password, 10)`).
-- On login/register, the server signs a JSON Web Token (JWT) containing `{ id, name, email }`.
-- The client sends the token in the `Authorization: Bearer <token>` header for all authenticated routes.
+### 1. Two-Step Email OTP Account Verification
+- **Step 1: Code Generation & Dispatch (`POST /api/auth/send-otp`)**:
+  - Validates that the email is not already registered in `User`.
+  - Generates a cryptographically randomized 6-digit numeric verification code.
+  - Stores the OTP in MongoDB with a **TTL (Time-To-Live) index** (`createdAt: { type: Date, default: Date.now, expires: 600 }`) so expired codes are automatically purged after 10 minutes.
+  - Uses `nodemailer` to dispatch a branded HTML email to the user.
+  - *Dev/Fallback Mode*: If SMTP environment variables are not configured, the OTP is safely logged directly to the server console to allow seamless offline development and testing.
+- **Step 2: Verification & Account Creation (`POST /api/auth/verify-otp-register`)**:
+  - Validates the submitted 6-digit code against the active `Otp` document in MongoDB.
+  - Salts and hashes the user's password with `bcryptjs` (10 rounds).
+  - Creates the new `User` document and deletes the OTP record.
+  - Signs and issues a stateless JSON Web Token (JWT), logging the user in immediately.
 
-### Location Endpoint Rate Limiting
-- Endpoints returning location coordinates (`/api/activities`, `/api/recommendations`) are protected by `express-rate-limit`.
-- Uses Redis store (`rate-limit-redis`) when `REDIS_URL` is set, and automatically falls back to an in-memory store if Redis is unavailable.
+### 2. Google OAuth 2.0 Sign-In
+- **Client**: Integrates the official Google Identity Services (`gsi/client`) 1-click authentication.
+- **Server (`POST /api/auth/google`)**:
+  - Receives the Google ID token and verifies its cryptographic signature using Google's public keys via `google-auth-library` against `GOOGLE_CLIENT_ID`.
+  - Finds or creates the matching `User` account (`googleId: payload.sub`).
+  - Issues LinkUp's own JWT token so downstream routes use a single uniform authorization standard.
+
+### 3. Stateless JWT & Rate Limiting
+- **Stateless Tokens**: Auth tokens contain `{ id, name, email }` with 7-day expiration. Sent in `Authorization: Bearer <token>`.
+- **Location Endpoint Rate Limiting**: Endpoints returning location coordinates (`/api/activities`, `/api/recommendations`) are protected by `express-rate-limit` (Redis store when `REDIS_URL` is set; in-memory fallback if omitted).
 
 ---
 
@@ -202,5 +217,6 @@ When creating a new Web Service in the Render Dashboard:
 | `JWT_SECRET` | 32+ character random string | Signs authentication tokens |
 | `NODE_ENV` | `production` | Optimizes Express performance |
 | `REDIS_URL` | *(Optional)* Upstash or Redis URL | If omitted, in-memory rate limiting is used |
-| `GOOGLE_CLIENT_ID` | *(Optional)* Google OAuth Client ID | Required only if testing Google Sign-in |
+| `GOOGLE_CLIENT_ID` | *(Optional)* Google OAuth Client ID | Required for Google 1-click Sign-in |
+| `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS` | *(Optional)* SMTP credentials (or `GMAIL_USER`/`GMAIL_PASS`) | Sends OTP emails; if omitted, OTP logs to console |
 | `ML_SERVICE_URL` | *(Optional)* Python ML microservice URL | If omitted, fallback recommender is used |

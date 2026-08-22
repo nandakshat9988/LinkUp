@@ -74,31 +74,226 @@ function requireLogin() {
 }
 
 /* ============================================================
-   AUTH: REGISTER & LOGIN
+   AUTH: REGISTER (WITH EMAIL OTP), LOGIN & GOOGLE SIGN-IN
    ============================================================ */
-async function register(event) {
-    event.preventDefault();
-    showStatus('register-status', 'Creating your account...', 'info');
+let pendingRegistrationData = null;
+let resendTimerInterval = null;
+let googleClientId = null;
 
-    const body = {
-        name: value('register-name'),
-        email: value('register-email'),
-        password: value('register-password')
-    };
+// Initialize Google OAuth if client ID is configured
+async function initGoogleAuth() {
+    try {
+        const config = await sendRequest('/auth/config');
+        if (config && config.googleClientId) {
+            googleClientId = config.googleClientId;
+
+            if (window.google && window.google.accounts) {
+                window.google.accounts.id.initialize({
+                    client_id: googleClientId,
+                    callback: handleGoogleCredentialResponse
+                });
+            }
+        }
+    } catch (err) {
+        console.warn('Google auth config notice:', err.message);
+    }
+}
+
+function triggerGoogleSignIn() {
+    const statusId = el('register-status') ? 'register-status' : 'login-status';
+
+    if (googleClientId && window.google && window.google.accounts) {
+        window.google.accounts.id.prompt((notification) => {
+            if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+                showStatus(statusId, 'Please ensure popups are allowed or sign in with email OTP.', 'info');
+            }
+        });
+    } else {
+        showStatus(statusId, 'Google Sign-In requires GOOGLE_CLIENT_ID in server .env. Use Email OTP verification for instant signup!', 'info');
+    }
+}
+
+async function handleGoogleCredentialResponse(response) {
+    const statusId = el('register-status') ? 'register-status' : 'login-status';
+    showStatus(statusId, 'Verifying Google authentication...', 'info');
 
     try {
-        const data = await sendRequest('/auth/register', {
+        const data = await sendRequest('/auth/google', {
+            method: 'POST',
+            headers: authHeaders(true),
+            body: JSON.stringify({ idToken: response.credential })
+        });
+
+        saveSession(data.token, data.user);
+        showStatus(statusId, 'Google Sign-In successful! Redirecting...', 'success');
+        setTimeout(() => { window.location.href = 'dashboard.html'; }, 500);
+    } catch (err) {
+        showStatus(statusId, err.message || 'Google authentication failed', 'error');
+    }
+}
+
+// STEP 1: Request OTP for new registration
+async function handleSendOtp(event) {
+    event.preventDefault();
+    showStatus('register-status', 'Sending verification code...', 'info');
+
+    const name = value('register-name');
+    const email = value('register-email');
+    const password = value('register-password');
+
+    if (!name || !email || !password) {
+        showStatus('register-status', 'Please complete all fields.', 'error');
+        return;
+    }
+
+    if (password.length < 6) {
+        showStatus('register-status', 'Password must be at least 6 characters.', 'error');
+        return;
+    }
+
+    const btn = el('register-send-otp-btn');
+    if (btn) btn.disabled = true;
+
+    try {
+        const data = await sendRequest('/auth/send-otp', {
+            method: 'POST',
+            headers: authHeaders(true),
+            body: JSON.stringify({ name, email })
+        });
+
+        pendingRegistrationData = { name, email, password };
+
+        // Switch form view to Step 2 (OTP Entry)
+        if (el('register-step1-form')) el('register-step1-form').style.display = 'none';
+        if (el('google-auth-wrapper')) el('google-auth-wrapper').style.display = 'none';
+        if (el('auth-divider-box')) el('auth-divider-box').style.display = 'none';
+
+        if (el('register-step2-form')) el('register-step2-form').style.display = 'block';
+        if (el('auth-main-title')) el('auth-main-title').innerText = 'Verify Your Email';
+        if (el('auth-main-subtitle')) el('auth-main-subtitle').innerText = 'Enter the 6-digit code sent to your inbox';
+        if (el('otp-target-email-text')) el('otp-target-email-text').innerText = email;
+
+        const otpInput = el('register-otp');
+        if (otpInput) {
+            otpInput.value = '';
+            otpInput.focus();
+        }
+
+        startResendTimer(45);
+        showStatus('register-status', data.devMode ? 'Verification code generated! (Logged in server console)' : 'Verification code sent to your email.', 'success');
+    } catch (err) {
+        showStatus('register-status', err.message || 'Failed to send verification code', 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+// STEP 2: Verify OTP and finalize account registration
+async function handleVerifyOtpAndRegister(event) {
+    event.preventDefault();
+
+    if (!pendingRegistrationData) {
+        backToRegistrationStep1();
+        return;
+    }
+
+    const otp = value('register-otp');
+    if (!otp || otp.length !== 6) {
+        showStatus('register-status', 'Please enter the complete 6-digit code.', 'error');
+        return;
+    }
+
+    showStatus('register-status', 'Verifying code and creating account...', 'info');
+
+    const verifyBtn = el('register-verify-btn');
+    if (verifyBtn) verifyBtn.disabled = true;
+
+    try {
+        const body = {
+            name: pendingRegistrationData.name,
+            email: pendingRegistrationData.email,
+            password: pendingRegistrationData.password,
+            otp
+        };
+
+        const data = await sendRequest('/auth/verify-otp-register', {
             method: 'POST',
             headers: authHeaders(true),
             body: JSON.stringify(body)
         });
 
         saveSession(data.token, data.user);
-        showStatus('register-status', 'Account created! Redirecting...', 'success');
+        showStatus('register-status', 'Account verified & created! Redirecting...', 'success');
         setTimeout(() => { window.location.href = 'dashboard.html'; }, 500);
     } catch (err) {
-        showStatus('register-status', err.message || 'Registration failed', 'error');
+        showStatus('register-status', err.message || 'Verification failed. Please check the code.', 'error');
+    } finally {
+        if (verifyBtn) verifyBtn.disabled = false;
     }
+}
+
+function backToRegistrationStep1() {
+    if (resendTimerInterval) clearInterval(resendTimerInterval);
+
+    if (el('register-step2-form')) el('register-step2-form').style.display = 'none';
+    if (el('register-step1-form')) el('register-step1-form').style.display = 'block';
+    if (el('google-auth-wrapper')) el('google-auth-wrapper').style.display = 'block';
+    if (el('auth-divider-box')) el('auth-divider-box').style.display = 'flex';
+
+    if (el('auth-main-title')) el('auth-main-title').innerText = 'Create an Account';
+    if (el('auth-main-subtitle')) el('auth-main-subtitle').innerText = 'Join players in your area and play matches';
+    hideStatus('register-status');
+}
+
+async function resendRegistrationOtp() {
+    if (!pendingRegistrationData) return;
+
+    showStatus('register-status', 'Sending fresh verification code...', 'info');
+
+    try {
+        const data = await sendRequest('/auth/send-otp', {
+            method: 'POST',
+            headers: authHeaders(true),
+            body: JSON.stringify({
+                name: pendingRegistrationData.name,
+                email: pendingRegistrationData.email
+            })
+        });
+
+        startResendTimer(45);
+        showStatus('register-status', data.devMode ? 'Fresh code generated! (Logged in server console)' : 'Fresh verification code sent!', 'success');
+    } catch (err) {
+        showStatus('register-status', err.message || 'Failed to resend code', 'error');
+    }
+}
+
+function startResendTimer(seconds = 45) {
+    if (resendTimerInterval) clearInterval(resendTimerInterval);
+
+    let timeLeft = seconds;
+    const countText = el('resend-countdown-text');
+    const countSec = el('resend-seconds');
+    const resendBtn = el('resend-code-btn');
+
+    if (countText) countText.style.display = 'inline';
+    if (countSec) countSec.innerText = timeLeft;
+    if (resendBtn) resendBtn.style.display = 'none';
+
+    resendTimerInterval = setInterval(() => {
+        timeLeft -= 1;
+        if (countSec) countSec.innerText = timeLeft;
+
+        if (timeLeft <= 0) {
+            clearInterval(resendTimerInterval);
+            if (countText) countText.style.display = 'none';
+            if (resendBtn) resendBtn.style.display = 'inline-block';
+        }
+    }, 1000);
+}
+
+// Backward-compatible direct registration function
+async function register(event) {
+    handleSendOtp(event);
 }
 
 async function login(event) {

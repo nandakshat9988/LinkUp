@@ -4,8 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Create Account - LinkUp</title>
-    <meta name="description" content="Join LinkUp to share and discover local sports activities and matches.">
+    <meta name="description" content="Join LinkUp with Email OTP verification or Google Sign-In to share and discover local sports activities.">
     <link rel="stylesheet" href="style.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
     <div class="auth-page-container">
@@ -20,11 +21,30 @@
                     </div>
                     <span class="brand-text">LinkUp</span>
                 </a>
-                <h1 class="auth-title">Create an Account</h1>
-                <p class="auth-subtitle">Join players in your area and play matches</p>
+                <h1 class="auth-title" id="auth-main-title">Create an Account</h1>
+                <p class="auth-subtitle" id="auth-main-subtitle">Join players in your area and play matches</p>
             </header>
 
-            <form onsubmit="register(event)" id="register-form">
+            <!-- 1-CLICK GOOGLE SIGN IN -->
+            <div id="google-auth-wrapper" class="google-auth-wrapper">
+                <button type="button" class="btn btn-google btn-full" id="google-signup-btn" onclick="triggerGoogleSignIn()">
+                    <svg class="google-icon" width="18" height="18" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                    </svg>
+                    <span>Sign up with Google</span>
+                </button>
+                <div id="g_id_onload"></div>
+            </div>
+
+            <div class="auth-divider" id="auth-divider-box">
+                <span>OR WITH EMAIL OTP</span>
+            </div>
+
+            <!-- STEP 1: USER DETAILS FORM -->
+            <form onsubmit="handleSendOtp(event)" id="register-step1-form">
                 <div class="form-group">
                     <label for="register-name" class="form-label">Full Name</label>
                     <input type="text" id="register-name" class="form-input" placeholder="e.g. John Doe" required autocomplete="name">
@@ -37,12 +57,40 @@
 
                 <div class="form-group">
                     <label for="register-password" class="form-label">Password</label>
-                    <input type="password" id="register-password" class="form-input" placeholder="Create a secure password" required autocomplete="new-password">
+                    <input type="password" id="register-password" class="form-input" placeholder="Create a secure password" minlength="6" required autocomplete="new-password">
                 </div>
 
-                <button type="submit" class="btn btn-primary btn-full btn-lg" id="register-submit-btn" style="margin-top: 10px;">
-                    Create Account
+                <button type="submit" class="btn btn-primary btn-full btn-lg" id="register-send-otp-btn" style="margin-top: 10px;">
+                    Send Verification Code →
                 </button>
+            </form>
+
+            <!-- STEP 2: OTP VERIFICATION FORM (Initially Hidden) -->
+            <form onsubmit="handleVerifyOtpAndRegister(event)" id="register-step2-form" style="display: none;">
+                <div class="otp-banner-box">
+                    <p class="otp-banner-text">
+                        A 6-digit code has been sent to <br>
+                        <strong id="otp-target-email-text" style="color: var(--brand-cyan);"></strong>
+                        <button type="button" class="btn-link" onclick="backToRegistrationStep1()" style="margin-left: 6px; font-size: 13px;">(Edit)</button>
+                    </p>
+                </div>
+
+                <div class="form-group" style="text-align: center;">
+                    <label for="register-otp" class="form-label" style="text-align: center;">Enter 6-Digit Code</label>
+                    <input type="text" id="register-otp" class="form-input otp-input-field" placeholder="123456" maxlength="6" pattern="[0-9]{6}" required autocomplete="one-time-code" autofocus>
+                    <p class="form-hint" style="text-align: center; margin-top: 6px;">Check your email inbox or spam folder</p>
+                </div>
+
+                <button type="submit" class="btn btn-success btn-full btn-lg" id="register-verify-btn" style="margin-top: 10px;">
+                    ✅ Verify & Create Account
+                </button>
+
+                <div class="resend-container">
+                    <span id="resend-countdown-text">Resend code in <strong id="resend-seconds">45</strong>s</span>
+                    <button type="button" id="resend-code-btn" class="btn-link" onclick="resendRegistrationOtp()" style="display: none;">
+                        🔄 Resend Verification Code
+                    </button>
+                </div>
             </form>
 
             <div id="register-status" class="status-message"></div>
@@ -55,5 +103,8 @@
     </div>
 
     <script src="app.js"></script>
+    <script>
+        initGoogleAuth();
+    </script>
 </body>
 </html>
