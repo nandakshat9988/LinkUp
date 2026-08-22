@@ -55,6 +55,7 @@ router.post('/', requireAuth, async (req, res) => {
       {
         $match: {
           status: { $ne: 'completed' },
+          eventDate: { $gt: new Date() },
           user: { $ne: new mongoose.Types.ObjectId(req.user.id) }
         }
       },

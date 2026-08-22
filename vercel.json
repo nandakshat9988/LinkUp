@@ -24,8 +24,16 @@
       "dest": "/backend-node/server.js"
     },
     {
-      "src": "/(.*)",
+      "src": "/",
+      "dest": "/frontend/index.html"
+    },
+    {
+      "src": "/(style\\.css|app\\.js|login\\.html|register\\.html|dashboard\\.html|activity\\.html|index\\.html)",
       "dest": "/frontend/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/frontend/index.html"
     }
   ]
 }

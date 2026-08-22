@@ -75,8 +75,9 @@
                             <input type="text" id="activity-venue" class="form-input" placeholder="e.g. Decathlon Turf, Sector 62" required>
                         </div>
                         <div class="form-group">
-                            <label for="activity-time" class="form-label">Date & Time</label>
-                            <input type="text" id="activity-time" class="form-input" placeholder="e.g. Today, 6:30 PM" required>
+                            <label for="activity-event-datetime" class="form-label">Event Date & Time</label>
+                            <input type="datetime-local" id="activity-event-datetime" class="form-input" required>
+                            <small class="form-hint" style="color: var(--text-muted); font-size: 11px; margin-top: 4px; display: block;">When this event time passes, the match moves to Completed Events & chat closes.</small>
                         </div>
                     </div>
 
@@ -123,7 +124,7 @@
                     <h2 class="panel-title">
                         <span>📍</span> Nearby Activities
                     </h2>
-                    <p class="panel-subtitle">Matches within your dynamic geohash radius</p>
+                    <p class="panel-subtitle">Upcoming matches within your dynamic geohash radius</p>
                 </div>
                 <button class="btn btn-secondary btn-sm" onclick="findNearby()">Refresh Nearby</button>
             </div>
@@ -138,9 +139,9 @@
             <div class="panel-header">
                 <div>
                     <h2 class="panel-title">
-                        <span>🌐</span> Community Feed
+                        <span>🌐</span> Live Community Feed
                     </h2>
-                    <p class="panel-subtitle">Latest open activities posted across the network</p>
+                    <p class="panel-subtitle">Latest open upcoming activities posted across the network</p>
                 </div>
                 <button class="btn btn-secondary btn-sm" onclick="loadAllPosts()">Refresh Feed</button>
             </div>
@@ -156,13 +157,29 @@
                     <h2 class="panel-title">
                         <span>📋</span> Manage Your Posts & Requests
                     </h2>
-                    <p class="panel-subtitle">Review join requests from other players, confirm participants, or complete posts</p>
+                    <p class="panel-subtitle">Review join requests, chat with confirmed players, or view status</p>
                 </div>
                 <button class="btn btn-secondary btn-sm" onclick="loadMyPosts()">Refresh My Posts</button>
             </div>
             <div id="my-posts-status" class="status-message" style="margin-bottom: 16px;"></div>
             <ul id="my-posts-list" class="activity-card-list">
                 <li class="empty-state-box">You haven't posted any activities yet.</li>
+            </ul>
+        </section>
+
+        <!-- COMPLETED & PAST EVENTS PANEL -->
+        <section class="app-panel">
+            <div class="panel-header">
+                <div>
+                    <h2 class="panel-title">
+                        <span>🏁</span> Completed & Past Events
+                    </h2>
+                    <p class="panel-subtitle">Concluded matches and past games (messaging service disabled)</p>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="loadCompletedPosts()">Refresh Completed</button>
+            </div>
+            <ul id="completed-posts-list" class="activity-card-list">
+                <li class="empty-state-box">Loading completed events...</li>
             </ul>
         </section>
     </main>

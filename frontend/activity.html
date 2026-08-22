@@ -98,6 +98,40 @@
                 <h4>🎉 You Are Confirmed for this Match!</h4>
                 <p id="revealed-contact-text">Host Contact:</p>
             </div>
+
+            <!-- MATCH MESSAGING SECTION (HOST & CONFIRMED PARTICIPANTS) -->
+            <section class="action-box" id="activity-chat-container" style="display: none;">
+                <div class="chat-header">
+                    <div>
+                        <h2 class="action-box-title" style="margin-bottom: 2px;">💬 Match Team Chat</h2>
+                        <p class="action-box-desc" style="margin-bottom: 0;">Direct messaging between the host and confirmed players.</p>
+                    </div>
+                    <span class="meta-pill" id="chat-live-badge" style="color: var(--accent-green); background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.3);">● Active Session</span>
+                </div>
+
+                <!-- STATUS BANNER WHEN EVENT CONCLUDED -->
+                <div id="chat-disabled-banner" class="chat-disabled-banner" style="display: none;">
+                    🔒 <strong>Event time has passed.</strong> This event is now completed and the messaging service is disabled.
+                </div>
+
+                <!-- MESSAGE STREAM -->
+                <div class="chat-messages-box" id="chat-messages-list">
+                    <div class="empty-state-box" style="padding: 20px;">No messages yet. Send a message to coordinate match details!</div>
+                </div>
+
+                <!-- MESSAGE INPUT FORM -->
+                <form class="chat-input-bar" id="chat-form" onsubmit="sendChatMessage(event)">
+                    <input type="text" id="chat-message-input" class="form-input" placeholder="Type a message to your match group..." required autocomplete="off">
+                    <button type="submit" class="btn btn-primary" id="chat-send-btn">
+                        <span>Send</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                    </button>
+                </form>
+                <div id="chat-status" class="status-message"></div>
+            </section>
         </article>
     </main>
 

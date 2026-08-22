@@ -73,12 +73,17 @@ Every activity post includes:
 - `activityType` *(String)*: e.g. "Cricket", "Football", "Running"
 - `description` *(String)*: Match details & notes
 - `venue` *(String)*: Venue or meeting point (e.g. "Decathlon Turf, Sector 62")
-- `time` *(String)*: Scheduled date & time (e.g. "Saturday at 6:00 PM")
+- `time` *(String)*: Human-readable scheduled date & time
+- `eventDate` *(Date)*: ISO timestamp of scheduled event date & time (drives auto-expiration & chat lifecycle)
 - `membersRequired` *(Number)*: Total number of players needed (e.g. 4)
 - `contactDetails` *(String)*: Phone, WhatsApp, or Instagram info (revealed only to confirmed players)
 - `location` *(GeoJSON Point)*: `[longitude, latitude]`
 - `joinRequests` *(Array of User IDs)*: Users waiting for host approval
 - `participants` *(Array of User IDs)*: Users confirmed by the host
+- `messages` *(Array of Subdocuments)*: Direct messaging stream between host and confirmed players
+  - `sender` *(User ID ref)*
+  - `text` *(String)*
+  - `createdAt` *(Date)*
 - `status` *(String)*: `'open'` or `'completed'`
 
 ### Workflow Flowchart
@@ -105,13 +110,43 @@ Host clicks "Confirm & Add to Match"
          │
          ├── Host contact details unlocked & revealed to confirmed user
          │
+         ├── 💬 Match Team Chat UNLOCKED between Host & Confirmed Players
+         │
          └── If participants.length >= membersRequired:
                  Activity status automatically set to "completed"
 ```
 
 ---
 
-## 5. Auth & Security
+## 5. Post-Join Team Messaging & Event Lifecycle Auto-Completion
+
+**Files:** `backend-node/routes/activities.js` (`POST /:id/messages`, `GET /:id/messages`, `GET /completed`), `frontend/activity.html`, `frontend/app.js`
+
+### 1. Authorization Barrier for Messaging
+- Only the **host** (`activity.user`) and **confirmed players** (`activity.participants`) have permission to view or post messages in an activity match chat.
+- Any request from an unauthenticated user or a non-participant returns **HTTP 403 Forbidden**.
+
+### 2. Time-Based Service Deactivation & Auto-Completion
+- Every post stores an exact scheduled `eventDate` selected by the host during post creation (`<input type="datetime-local">`).
+- **Auto-Expiration Mechanism**:
+  - When the server handles any request (`/api/activities`, `/api/activities/nearby`, `/api/activities/:id`, `/api/activities/:id/messages`), it checks if `activity.eventDate <= new Date()`.
+  - Once the scheduled event date and time arrives/passes:
+    1. The activity is automatically marked with `status: 'completed'` and `completedAt: new Date()`.
+    2. The activity moves from the live community feed to the **🏁 Completed Events** panel.
+    3. The messaging service is **disabled**:
+       - Server rejects new message submissions with **HTTP 400 Bad Request** (*"Event date and time has passed. Messaging is disabled for completed events."*).
+       - Client UI displays an alert banner (*"🔒 Event time has passed. This event is now completed and the messaging service is disabled."*) and disables input and send buttons.
+       - Chat history remains readable for past reference.
+
+### 3. Lightweight, Real-Time Syncing Without Heavy WebSocket Overheads
+- To keep the architecture minimal, resilient, and cloud-deployable without separate WebSocket server overhead:
+  - Messages are stored directly inside the MongoDB `Activity` document.
+  - Active detail views execute a lightweight 4-second REST poll (`GET /api/activities/:id/messages`) while the event is open.
+  - Polling automatically stops as soon as the event concludes.
+
+---
+
+## 6. Auth & Security
 
 **Files:** `backend-node/models/User.js`, `backend-node/middleware/auth.js`, `backend-node/middleware/rateLimiter.js`, `backend-node/routes/auth.js`
 
@@ -126,7 +161,7 @@ Host clicks "Confirm & Add to Match"
 
 ---
 
-## 6. Cloud Deployment Architecture (Render)
+## 7. Cloud Deployment Architecture (Render)
 
 **Files:** `backend-node/server.js`, `frontend/app.js`, `package.json`, `render.yaml`
 
@@ -142,7 +177,7 @@ Express handles both the REST API and the static frontend assets:
 
 ---
 
-## 7. Render Deployment Cheat Sheet
+## 8. Render Deployment Cheat Sheet
 
 When creating a new Web Service in the Render Dashboard:
 

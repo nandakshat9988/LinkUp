@@ -6,7 +6,8 @@ const activitySchema = new mongoose.Schema({
   activityType: { type: String, required: true },   // e.g. "Cricket", "Football", "Running"
   description: { type: String, required: true },    // e.g. "Need 2 players for friendly weekend match"
   venue: { type: String, required: true },          // e.g. "Decathlon Turf, Central Park"
-  time: { type: String, required: true },           // e.g. "Saturday at 6:00 PM"
+  time: { type: String, default: '' },             // Human readable time description
+  eventDate: { type: Date, required: true },       // Scheduled event date & time for auto-expiration & messaging lifecycle
   membersRequired: { type: Number, default: 1, min: 1 }, // Total number of players/members needed
   contactDetails: { type: String, default: '' },    // Shared with confirmed participants
 
@@ -29,6 +30,15 @@ const activitySchema = new mongoose.Schema({
   // Users who have been confirmed by the post creator
   participants: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 
+  // Lightweight messaging between post creator and confirmed participants
+  messages: [
+    {
+      sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+      text: { type: String, required: true, trim: true },
+      createdAt: { type: Date, default: Date.now }
+    }
+  ],
+
   completedAt: { type: Date },
   createdAt: { type: Date, default: Date.now }
 });
@@ -38,5 +48,7 @@ const activitySchema = new mongoose.Schema({
 // tree structure, instead of scanning every document and computing distance
 // by hand (O(N), which falls over once you have millions of active posts).
 activitySchema.index({ location: '2dsphere' });
+activitySchema.index({ eventDate: 1 });
 
 module.exports = mongoose.model('Activity', activitySchema);
+
