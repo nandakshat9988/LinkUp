@@ -112,27 +112,31 @@ Host clicks "Confirm & Add to Match"
          │
          ├── 💬 Match Team Chat UNLOCKED between Host & Confirmed Players
          │
+         ├── Activity appears in player's "🎮 My Confirmed Live Matches" dashboard
+         │
          └── If participants.length >= membersRequired:
-                 Activity status automatically set to "completed"
+                 Match marked as "Full", but remains OPEN with active chat until eventDate!
 ```
 
 ---
 
 ## 5. Post-Join Team Messaging & Event Lifecycle Auto-Completion
 
-**Files:** `backend-node/routes/activities.js` (`POST /:id/messages`, `GET /:id/messages`, `GET /completed`), `frontend/activity.html`, `frontend/app.js`
+**Files:** `backend-node/routes/activities.js` (`POST /:id/messages`, `GET /:id/messages`, `GET /joined`, `GET /completed`), `frontend/activity.html`, `frontend/app.js`
 
-### 1. Authorization Barrier for Messaging
+### 1. Authorization Barrier & Confirmed Live Matches Dashboard
 - Only the **host** (`activity.user`) and **confirmed players** (`activity.participants`) have permission to view or post messages in an activity match chat.
 - Any request from an unauthenticated user or a non-participant returns **HTTP 403 Forbidden**.
+- Confirmed players can access all their upcoming active games at any time from the **🎮 My Confirmed Live Matches** panel on their Dashboard (`GET /api/activities/joined`).
 
-### 2. Time-Based Service Deactivation & Auto-Completion
+### 2. Time-Based Service Deactivation & Completion Policy
 - Every post stores an exact scheduled `eventDate` selected by the host during post creation (`<input type="datetime-local">`).
+- **Full Squad Persistence**: Filling the squad (`participants.length >= membersRequired`) does **NOT** prematurely complete the event. The match remains active so that the host and confirmed teammates can coordinate via team chat right up to game time.
 - **Auto-Expiration Mechanism**:
-  - When the server handles any request (`/api/activities`, `/api/activities/nearby`, `/api/activities/:id`, `/api/activities/:id/messages`), it checks if `activity.eventDate <= new Date()`.
+  - When the server handles any request (`/api/activities`, `/api/activities/joined`, `/api/activities/nearby`, `/api/activities/:id`, `/api/activities/:id/messages`), it checks if `activity.eventDate <= new Date()`.
   - Once the scheduled event date and time arrives/passes:
     1. The activity is automatically marked with `status: 'completed'` and `completedAt: new Date()`.
-    2. The activity moves from the live community feed to the **🏁 Completed Events** panel.
+    2. The activity moves from the live feeds and joined matches to the **🏁 Completed Events** panel.
     3. The messaging service is **disabled**:
        - Server rejects new message submissions with **HTTP 400 Bad Request** (*"Event date and time has passed. Messaging is disabled for completed events."*).
        - Client UI displays an alert banner (*"🔒 Event time has passed. This event is now completed and the messaging service is disabled."*) and disables input and send buttons.

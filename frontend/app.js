@@ -149,6 +149,7 @@ function startDashboard() {
 
     loadAllPosts();
     loadMyPosts();
+    loadJoinedPosts();
     loadCompletedPosts();
 }
 
@@ -205,6 +206,7 @@ function postActivity(event) {
 
             loadAllPosts();
             loadMyPosts();
+            loadJoinedPosts();
             loadCompletedPosts();
         } catch (err) {
             showStatus('post-status', err.message, 'error');
@@ -233,6 +235,29 @@ async function loadAllPosts() {
         posts.forEach(post => list.appendChild(makeActivityCard(post, 'recent')));
     } catch (err) {
         list.innerHTML = `<li class="empty-state-box" style="color: var(--accent-rose);">Failed to load posts: ${err.message}</li>`;
+    }
+}
+
+async function loadJoinedPosts() {
+    if (!requireLogin()) return;
+    const list = el('joined-posts-list');
+    if (!list) return;
+
+    try {
+        const posts = await sendRequest('/activities/joined', {
+            headers: authHeaders()
+        });
+
+        list.innerHTML = '';
+
+        if (!posts || posts.length === 0) {
+            list.innerHTML = '<li class="empty-state-box">You haven\'t joined any active confirmed matches yet. Browse the community feed to find games!</li>';
+            return;
+        }
+
+        posts.forEach(post => list.appendChild(makeActivityCard(post, 'joined')));
+    } catch (err) {
+        showStatus('joined-posts-status', err.message, 'error');
     }
 }
 
@@ -358,22 +383,34 @@ function makeActivityCard(post, source) {
 
     const id = post._id || post.id;
     const isPast = post.eventDate && new Date(post.eventDate) <= new Date();
-    const status = isPast ? 'completed' : (post.status || 'open');
-    const hostName = post.user?.name || 'Community Member';
     const participantsCount = post.participants ? post.participants.length : 0;
     const totalRequired = post.membersRequired || 1;
+    const isFull = participantsCount >= totalRequired;
+
+    let status = isPast ? 'completed' : (post.status || 'open');
+    if (!isPast && isFull && status !== 'completed') {
+        status = 'full';
+    }
+
+    const hostName = post.user?.name || 'Community Member';
     const venue = post.venue || 'Local Spot';
     const time = post.time || (post.eventDate ? new Date(post.eventDate).toLocaleString() : 'Flexible');
 
     let extraPill = '';
+    let btnText = 'View & Join →';
+
     if (source === 'nearby') {
         const meters = Math.round(post.distanceMeters || 0);
         extraPill = `<span class="meta-pill score">⚡ ${meters < 1000 ? meters + ' m' : (meters/1000).toFixed(1) + ' km'} away</span>`;
     } else if (source === 'suggested') {
         const score = post.score ? post.score.toFixed(2) : '0.00';
         extraPill = `<span class="meta-pill score">🧠 AI Score: ${score}</span>`;
+    } else if (source === 'joined') {
+        extraPill = `<span class="meta-pill" style="color: #34d399; background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.35);">✅ Confirmed Player</span>`;
+        btnText = 'Open Match Chat & Details →';
     } else if (source === 'completed' || isPast) {
         extraPill = `<span class="meta-pill" style="color: var(--text-muted); background: rgba(255,255,255,0.05);">🏁 Concluded</span>`;
+        btnText = 'View Match & History →';
     }
 
     item.innerHTML = `
@@ -396,7 +433,7 @@ function makeActivityCard(post, source) {
         <div class="activity-card-bottom">
             <span class="host-tag">Posted by <strong>${hostName}</strong></span>
             <a href="activity.html?id=${id}" class="btn btn-primary btn-sm">
-                ${status === 'completed' ? 'View Match & History →' : 'View & Join →'}
+                ${btnText}
             </a>
         </div>
     `;
@@ -409,10 +446,16 @@ function makeMyPostCard(post) {
     item.className = 'activity-card';
     const id = post._id || post.id;
     const isPast = post.eventDate && new Date(post.eventDate) <= new Date();
-    const status = isPast ? 'completed' : (post.status || 'open');
     const pendingCount = post.joinRequests ? post.joinRequests.length : 0;
     const confirmedCount = post.participants ? post.participants.length : 0;
     const totalRequired = post.membersRequired || 1;
+    const isFull = confirmedCount >= totalRequired;
+
+    let status = isPast ? 'completed' : (post.status || 'open');
+    if (!isPast && isFull && status !== 'completed') {
+        status = 'full';
+    }
+
     const time = post.time || (post.eventDate ? new Date(post.eventDate).toLocaleString() : 'Time not set');
 
     item.innerHTML = `
@@ -457,6 +500,7 @@ async function completePost(id) {
         showStatus('my-posts-status', 'Activity marked as completed.', 'success');
         loadAllPosts();
         loadMyPosts();
+        loadJoinedPosts();
         loadCompletedPosts();
     } catch (err) {
         showStatus('my-posts-status', err.message, 'error');
@@ -474,6 +518,7 @@ async function deletePost(id) {
         showStatus('my-posts-status', 'Activity post deleted.', 'info');
         loadAllPosts();
         loadMyPosts();
+        loadJoinedPosts();
         loadCompletedPosts();
     } catch (err) {
         showStatus('my-posts-status', err.message, 'error');
@@ -519,10 +564,16 @@ function renderActivityDetails(activity) {
 
     const isPast = activity.eventDate && new Date(activity.eventDate) <= new Date();
     const isConcluded = isPast || activity.status === 'completed';
-    const displayStatus = isConcluded ? 'completed' : (activity.status || 'open');
 
     const confirmedCount = (activity.participants || []).length;
     const totalRequired = activity.membersRequired || 1;
+    const isFull = confirmedCount >= totalRequired;
+
+    let displayStatus = isConcluded ? 'completed' : (activity.status || 'open');
+    if (!isConcluded && isFull && displayStatus !== 'completed') {
+        displayStatus = 'full';
+    }
+
     const percentCapacity = Math.min(100, Math.round((confirmedCount / totalRequired) * 100));
 
     // Populate basic info
@@ -551,7 +602,9 @@ function renderActivityDetails(activity) {
     // If viewer is the HOST
     if (isHost) {
         heading.innerText = 'You are the Host of this Activity';
-        desc.innerText = 'Review join requests from other players below and confirm participants to fill your match.';
+        desc.innerText = isFull 
+            ? 'Squad is full! Coordinate with confirmed players in the team chat below until match time.'
+            : 'Review join requests from other players below and confirm participants to fill your match.';
 
         if (!isConcluded) {
             const completeBtn = document.createElement('button');
@@ -648,10 +701,17 @@ function renderActivityDetails(activity) {
         return;
     }
 
-    if (isConcluded || confirmedCount >= totalRequired) {
-        heading.innerText = isPast ? 'Event Concluded' : 'Activity Full / Completed';
-        desc.innerText = isPast ? 'The scheduled date and time for this match has passed.' : 'All member slots for this activity have been filled.';
+    if (isConcluded) {
+        heading.innerText = 'Event Concluded';
+        desc.innerText = 'The scheduled date and time for this match has passed.';
         buttonsGroup.innerHTML = `<button class="btn btn-secondary" disabled>Match Completed</button>`;
+        return;
+    }
+
+    if (isFull) {
+        heading.innerText = 'Squad Full (Match Upcoming)';
+        desc.innerText = `All player slots for this match (${confirmedCount}/${totalRequired}) are filled. The match is scheduled for ${activity.time || 'soon'}.`;
+        buttonsGroup.innerHTML = `<button class="btn btn-secondary" disabled>🔒 Squad Full</button>`;
         return;
     }
 

@@ -150,6 +150,23 @@
             </ul>
         </section>
 
+        <!-- USER'S JOINED & CONFIRMED LIVE MATCHES -->
+        <section class="app-panel">
+            <div class="panel-header">
+                <div>
+                    <h2 class="panel-title">
+                        <span>🎮</span> My Confirmed Live Matches
+                    </h2>
+                    <p class="panel-subtitle">Upcoming games you have joined and been confirmed in by the host (Active Chat & Details)</p>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="loadJoinedPosts()">Refresh Joined</button>
+            </div>
+            <div id="joined-posts-status" class="status-message" style="margin-bottom: 16px;"></div>
+            <ul id="joined-posts-list" class="activity-card-list">
+                <li class="empty-state-box">You haven't joined any active confirmed matches yet.</li>
+            </ul>
+        </section>
+
         <!-- USER'S OWN POSTS & REQUEST MANAGEMENT -->
         <section class="app-panel">
             <div class="panel-header">

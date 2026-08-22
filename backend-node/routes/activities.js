@@ -132,7 +132,27 @@ router.get('/mine', requireAuth, async (req, res) => {
   }
 });
 
-// 5. Nearby search using MongoDB 2dsphere index (open upcoming events only)
+// 5. Live events the logged-in user has joined and been confirmed in by the host
+router.get('/joined', requireAuth, async (req, res) => {
+  try {
+    await autoExpirePastActivities();
+
+    const activities = await Activity.find({
+      participants: req.user.id,
+      eventDate: { $gt: new Date() }
+    })
+      .sort({ eventDate: 1 })
+      .populate('user', 'name email')
+      .populate('participants', 'name email')
+      .populate('joinRequests', 'name email');
+
+    res.json(activities);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 6. Nearby search using MongoDB 2dsphere index (open upcoming events only)
 router.get('/nearby', async (req, res) => {
   try {
     await autoExpirePastActivities();
@@ -177,7 +197,7 @@ router.get('/nearby', async (req, res) => {
   }
 });
 
-// 6. Get a single activity by ID (with expiration check & populated messages)
+// 7. Get a single activity by ID (with expiration check & populated messages)
 router.get('/:id', async (req, res) => {
   try {
     let activity = await Activity.findById(req.params.id)
@@ -188,7 +208,7 @@ router.get('/:id', async (req, res) => {
 
     if (!activity) return res.status(404).json({ error: 'Activity not found' });
 
-    // Check expiration on-the-fly
+    // Check expiration on-the-fly (only expires when eventDate <= now)
     if (activity.eventDate && new Date(activity.eventDate) <= new Date() && activity.status !== 'completed') {
       activity.status = 'completed';
       activity.completedAt = activity.completedAt || new Date();
@@ -201,7 +221,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// 7. User submits a request to join an activity post
+// 8. User submits a request to join an activity post
 router.post('/:id/request-join', requireAuth, async (req, res) => {
   try {
     const activity = await Activity.findById(req.params.id);
@@ -214,7 +234,11 @@ router.post('/:id/request-join', requireAuth, async (req, res) => {
     }
 
     if (activity.status === 'completed') {
-      return res.status(400).json({ error: 'This activity is already completed or full' });
+      return res.status(400).json({ error: 'This activity is already completed' });
+    }
+
+    if (activity.participants.length >= (activity.membersRequired || 1)) {
+      return res.status(400).json({ error: 'This activity has reached full member capacity' });
     }
 
     if (userOwnsActivity(activity, req.user.id)) {
@@ -248,7 +272,7 @@ router.post('/:id/request-join', requireAuth, async (req, res) => {
   }
 });
 
-// 8. Host confirms a participant from pending join requests
+// 9. Host confirms a participant from pending join requests
 router.post('/:id/confirm-participant', requireAuth, async (req, res) => {
   try {
     const { userId } = req.body;
@@ -265,12 +289,8 @@ router.post('/:id/confirm-participant', requireAuth, async (req, res) => {
     activity.joinRequests = activity.joinRequests.filter(r => r.toString() !== userId);
     activity.participants.addToSet(userId);
 
-    // If required member capacity is reached, complete the activity
-    if (activity.participants.length >= (activity.membersRequired || 1)) {
-      activity.status = 'completed';
-      activity.completedAt = new Date();
-    }
-
+    // Note: The event stays OPEN until the actual scheduled eventDate arrives,
+    // even if member capacity is full, so host and confirmed members can chat.
     await activity.save();
 
     const updated = await Activity.findById(activity._id)
@@ -285,7 +305,8 @@ router.post('/:id/confirm-participant', requireAuth, async (req, res) => {
   }
 });
 
-// 9. Send a message on an activity post (accessible to Host & Confirmed Participants while event is active)
+
+// 10. Send a message on an activity post (accessible to Host & Confirmed Participants while event is active)
 router.post('/:id/messages', requireAuth, async (req, res) => {
   try {
     const { text } = req.body;
@@ -340,7 +361,7 @@ router.post('/:id/messages', requireAuth, async (req, res) => {
   }
 });
 
-// 10. Fetch messages for an activity (accessible to Host & Confirmed Participants)
+// 11. Fetch messages for an activity (accessible to Host & Confirmed Participants)
 router.get('/:id/messages', requireAuth, async (req, res) => {
   try {
     const activity = await Activity.findById(req.params.id)
@@ -366,7 +387,7 @@ router.get('/:id/messages', requireAuth, async (req, res) => {
   }
 });
 
-// 11. Edit your own post
+// 12. Edit your own post
 router.put('/:id', requireAuth, async (req, res) => {
   try {
     const activity = await Activity.findById(req.params.id);
@@ -397,7 +418,7 @@ router.put('/:id', requireAuth, async (req, res) => {
   }
 });
 
-// 12. Host manually marks post as completed
+// 13. Host manually marks post as completed
 router.patch('/:id/complete', requireAuth, async (req, res) => {
   try {
     const activity = await Activity.findById(req.params.id);
@@ -423,7 +444,7 @@ router.patch('/:id/complete', requireAuth, async (req, res) => {
   }
 });
 
-// 13. Delete your own post
+// 14. Delete your own post
 router.delete('/:id', requireAuth, async (req, res) => {
   try {
     const activity = await Activity.findById(req.params.id);
